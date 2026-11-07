@@ -11,6 +11,11 @@ return [
     // mongodb (production) | memory (tests, or running the API without MongoDB)
     'inventory_driver' => env('INVENTORY_DRIVER', 'mongodb'),
 
+    // Where POST /v1/uploads stores images. `public` needs `php artisan storage:link`; use `s3` at scale.
+    'uploads' => [
+        'disk' => env('UPLOADS_DISK', 'public'),
+    ],
+
     // Timezone used to bucket rentals into calendar days for availability.
     'business_timezone' => env('BUSINESS_TIMEZONE', 'Africa/Accra'),
 

@@ -83,6 +83,7 @@ class AppServiceProvider extends ServiceProvider
         Events::listen(BookingCreated::class, MarkRecommendationBooked::class);
 
         RateLimiter::for('api', fn (Request $request) => Limit::perMinute(120)->by($request->user()?->id ?: $request->ip()));
+        RateLimiter::for('uploads', fn (Request $request) => Limit::perMinute(20)->by($request->user()?->id ?: $request->ip()));
         RateLimiter::for('posting', fn (Request $request) => Limit::perMinute(10)->by($request->user()?->id ?: $request->ip()));
         RateLimiter::for('waitlist', fn (Request $request) => Limit::perMinute(config('eventapp.marketing.waitlist_per_minute'))->by('waitlist:'.$request->ip()));
         RateLimiter::for('otp', fn (Request $request) => [

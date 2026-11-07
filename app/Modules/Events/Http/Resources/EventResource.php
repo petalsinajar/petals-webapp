@@ -25,6 +25,7 @@ class EventResource extends JsonResource
             'venue' => [
                 'name' => $this->venue_name,
                 'address' => $this->venue_address,
+                'city' => $this->venue_city,
                 'lat' => $this->venue_lat,
                 'lng' => $this->venue_lng,
             ],
@@ -38,6 +39,9 @@ class EventResource extends JsonResource
             'host' => new ActorResource($this->whenLoaded('host')),
             'counts' => [
                 'going' => $this->going_count,
+                // Unset on a just-created model until it's re-read; the column defaults to 0.
+                'maybe' => $this->maybe_count ?? 0,
+                'declined' => $this->declined_count ?? 0,
                 'posts' => $this->posts_count,
                 'bookings' => $this->bookings_count,
             ],

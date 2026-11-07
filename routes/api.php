@@ -10,6 +10,7 @@ use App\Modules\Identity\Http\Controllers\MeController;
 use App\Modules\Identity\Http\Controllers\ProfileController;
 use App\Modules\Identity\Http\Controllers\VendorController;
 use App\Modules\Identity\Http\Controllers\VendorMemberController;
+use App\Modules\Media\Http\Controllers\UploadController;
 use App\Modules\Payments\Http\Controllers\PaymentWebhookController;
 use App\Modules\Recommendations\Http\Controllers\SuggestionController;
 use App\Modules\Social\Http\Controllers\CommentController;
@@ -54,6 +55,9 @@ Route::middleware(['auth:sanctum', 'abilities:access', 'active', 'throttle:api']
     Route::get('handles/{handle}/available', [MeController::class, 'handleAvailable']);
     Route::get('users/{handle}', [ProfileController::class, 'show']);
     Route::get('users/{user}/posts', [FeedController::class, 'userPosts'])->whereUlid('user');
+
+    // Media
+    Route::post('uploads', UploadController::class)->middleware('throttle:uploads');
 
     // Vendors
     Route::post('vendors', [VendorController::class, 'store']);

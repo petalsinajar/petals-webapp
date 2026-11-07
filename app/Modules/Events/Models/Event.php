@@ -31,7 +31,7 @@ class Event extends Model
 
     protected $fillable = [
         'type', 'title', 'description', 'cover_url', 'starts_at', 'ends_at', 'timezone',
-        'venue_name', 'venue_address', 'venue_lat', 'venue_lng', 'guest_count', 'budget_minor',
+        'venue_name', 'venue_address', 'venue_city', 'venue_lat', 'venue_lng', 'guest_count', 'budget_minor',
         'currency', 'visibility', 'theme', 'company', 'status',
     ];
 

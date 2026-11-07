@@ -64,9 +64,12 @@ class EventController extends Controller
     public function mine(Request $request): JsonResponse
     {
         $scope = $request->query('scope', 'upcoming');
+        $mine = EventMember::query()->where('user_id', $request->user()->id);
 
         $events = Event::query()
-            ->whereIn('id', EventMember::select('event_id')->where('user_id', $request->user()->id))
+            ->whereIn('id', $mine->clone()->select('event_id'))
+            // How I answered, so the app can sort invites from hosting.
+            ->addSelect(['my_rsvp' => $mine->clone()->select('rsvp')->whereColumn('event_id', 'events.id')->limit(1)])
             ->when($scope === 'past', fn ($q) => $q->where('ends_at', '<', now())->orderByDesc('starts_at')->orderByDesc('id'))
             ->when($scope !== 'past', fn ($q) => $q->where('ends_at', '>=', now())->orderBy('starts_at')->orderBy('id'))
             ->with('host')
@@ -139,14 +142,18 @@ class EventController extends Controller
 
         DB::transaction(function () use ($event, $request, $data) {
             $member = EventMember::lockForUpdate()->firstOrNew(['event_id' => $event->id, 'user_id' => $request->user()->id]);
-            $wasGoing = $member->exists && $member->rsvp === 'going';
+            $was = $member->exists ? $member->rsvp : null;
             $member->fill(['rsvp' => $data['rsvp'], 'plus_ones' => $data['plus_ones'] ?? 0]);
             $member->role ??= 'guest';
             $member->save();
 
-            $isGoing = $data['rsvp'] === 'going';
-            if ($isGoing !== $wasGoing) {
-                $event->newQuery()->whereKey($event->id)->increment('going_count', $isGoing ? 1 : -1);
+            // Move the guest between the going / maybe / declined counters.
+            if ($was !== $data['rsvp']) {
+                $query = $event->newQuery()->whereKey($event->id);
+                if (in_array($was, ['going', 'maybe', 'declined'], true)) {
+                    $query->clone()->decrement("{$was}_count");
+                }
+                $query->increment("{$data['rsvp']}_count");
             }
         });
 
@@ -168,6 +175,7 @@ class EventController extends Controller
             'timezone' => ['sometimes', 'timezone:all'],
             'venue_name' => ['sometimes', 'nullable', 'string', 'max:140'],
             'venue_address' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'venue_city' => ['sometimes', 'nullable', 'string', 'max:80'],
             'venue_lat' => ['sometimes', 'nullable', 'numeric', 'between:-90,90'],
             'venue_lng' => ['sometimes', 'nullable', 'numeric', 'between:-180,180'],
             'guest_count' => ['sometimes', 'nullable', 'integer', 'between:1,100000'],
