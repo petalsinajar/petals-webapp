@@ -1,0 +1,22 @@
+<?php
+
+use Illuminate\Support\Facades\Schedule;
+
+/*
+| Run the scheduler on the server with one cron entry (Forge sets this up):
+|   * * * * * php /path/to/artisan schedule:run
+*/
+
+// Release expired stock holds and expire their bookings.
+Schedule::command('inventory:release-expired-holds')->everyMinute()->withoutOverlapping()->onOneServer();
+
+// Returned bookings past the dispute window become completed (books vendor earnings).
+Schedule::command('bookings:complete-returned')->hourly()->withoutOverlapping()->onOneServer();
+
+// Discover ranking.
+Schedule::command('posts:rescore')->everyFiveMinutes()->withoutOverlapping()->onOneServer();
+
+// Housekeeping.
+Schedule::command('sanctum:prune-expired --hours=24')->daily();
+Schedule::command('model:prune', ['--model' => [\App\Modules\Identity\Models\OtpCode::class]])->daily();
+Schedule::command('horizon:snapshot')->everyFiveMinutes();
