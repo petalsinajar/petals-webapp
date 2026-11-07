@@ -76,6 +76,7 @@ class AppServiceProvider extends ServiceProvider
 
         RateLimiter::for('api', fn (Request $request) => Limit::perMinute(120)->by($request->user()?->id ?: $request->ip()));
         RateLimiter::for('posting', fn (Request $request) => Limit::perMinute(10)->by($request->user()?->id ?: $request->ip()));
+        RateLimiter::for('waitlist', fn (Request $request) => Limit::perMinute(config('eventapp.marketing.waitlist_per_minute'))->by('waitlist:'.$request->ip()));
         RateLimiter::for('otp', fn (Request $request) => [
             Limit::perMinute(5)->by('otp-ip:'.$request->ip()),
             Limit::perHour(10)->by('otp-phone:'.preg_replace('/\D/', '', (string) $request->input('phone'))),

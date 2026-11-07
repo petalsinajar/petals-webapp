@@ -1,0 +1,203 @@
+/* Only scan the landing page's own files, to keep the stylesheet small. */
+@import 'tailwindcss' source(none);
+
+@source '../views/landing';
+@source '../views/components/landing';
+
+@theme {
+    /* --font-fredoka and --font-dm-sans come from @fonts (see vite.config.js). */
+    --font-display: var(--font-fredoka), ui-rounded, 'Arial Rounded MT Bold', system-ui, sans-serif;
+    --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+
+    /* Warm cream base with ink text; every pairing below passes WCAG AA on cream. */
+    --color-cream: #fff8ee;
+    --color-cream-deep: #f8ead6;
+    --color-ink: #2b2118;
+    --color-ink-soft: #5e5045;
+
+    /* Petal accents: gold = weddings, pink = birthdays, blue = corporate.
+       The bright tone is for fills and shapes; the deep tone is for text. */
+    --color-gold: #e9a92b;
+    --color-gold-soft: #fbe7b5;
+    --color-gold-deep: #8a5a00;
+    --color-pink: #f2669a;
+    --color-pink-soft: #fcd9e6;
+    --color-pink-deep: #b0185a;
+    --color-blue: #4f8df5;
+    --color-blue-soft: #dbe7fd;
+    --color-blue-deep: #1d4fa8;
+}
+
+@layer base {
+    html {
+        scroll-behavior: smooth;
+        -webkit-text-size-adjust: 100%;
+    }
+
+    body {
+        @apply bg-cream font-sans text-ink antialiased;
+    }
+
+    :focus-visible {
+        outline: 3px solid var(--color-blue-deep);
+        outline-offset: 3px;
+    }
+
+    [id] {
+        scroll-margin-top: 5rem;
+    }
+}
+
+@layer components {
+    .btn {
+        @apply inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-6 font-semibold transition;
+    }
+
+    /* Use together with .btn, e.g. class="btn btn-primary". */
+    .btn-primary {
+        @apply bg-pink-deep text-white shadow-[0_6px_0_0_#7d1040] hover:translate-y-0.5 hover:shadow-[0_4px_0_0_#7d1040];
+    }
+
+    .btn-secondary {
+        @apply border-2 border-ink bg-white text-ink hover:bg-cream-deep;
+    }
+
+    .btn-dark {
+        @apply bg-ink text-cream hover:bg-ink-soft;
+    }
+
+    .eyebrow {
+        @apply text-sm font-bold tracking-[0.14em] uppercase;
+    }
+
+    .field-label {
+        @apply mb-1.5 block text-sm font-semibold text-ink;
+    }
+
+    .field {
+        @apply block min-h-12 w-full rounded-2xl border-2 border-ink/15 bg-white px-4 text-base text-ink placeholder:text-ink-soft/70 focus:border-blue-deep focus:outline-none;
+    }
+
+    .field[aria-invalid='true'] {
+        @apply border-pink-deep;
+    }
+
+    .field-error {
+        @apply mt-1.5 text-sm font-medium text-pink-deep empty:hidden;
+    }
+
+    .chip-check {
+        @apply flex min-h-11 cursor-pointer items-center gap-2 rounded-full border-2 border-ink/15 bg-white px-4 text-sm font-semibold has-checked:border-ink has-checked:bg-cream-deep has-focus-visible:outline-3 has-focus-visible:outline-offset-2 has-focus-visible:outline-blue-deep;
+    }
+
+    /* Off-screen rather than display:none, so form-filling bots still see it. */
+    .honeypot {
+        position: absolute;
+        left: -10000px;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+    }
+}
+
+/* ---- Petals drifting in the hero (CSS only) ---------------------------- */
+
+.petal {
+    position: absolute;
+    top: -6%;
+    left: var(--x);
+    width: var(--size, 16px);
+    height: calc(var(--size, 16px) * 1.3);
+    border-radius: 0 100% 0 100%;
+    background: var(--c);
+    opacity: 0;
+    will-change: transform, opacity;
+    animation: petal-drift var(--d, 14s) linear var(--delay, 0s) infinite;
+}
+
+@keyframes petal-drift {
+    0% {
+        transform: translate3d(0, 0, 0) rotate(0deg);
+        opacity: 0;
+    }
+    8% {
+        opacity: 0.85;
+    }
+    50% {
+        transform: translate3d(var(--sway, 40px), 50vh, 0) rotate(200deg);
+    }
+    92% {
+        opacity: 0.85;
+    }
+    100% {
+        transform: translate3d(0, 100vh, 0) rotate(380deg);
+        opacity: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto;
+    }
+
+    /* Keep the petals as a still pattern instead of moving them. */
+    .petal {
+        animation: none;
+        top: var(--rest-y, 20%);
+        opacity: 0.5;
+        transform: rotate(var(--rest-r, 30deg));
+    }
+
+    .btn-primary,
+    .pin {
+        transition: none;
+    }
+}
+
+/* ---- Shop the look -------------------------------------------------------- */
+
+.pin {
+    position: absolute;
+    translate: -50% -50%;
+    display: grid;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 9999px;
+    background: #fff;
+    color: var(--color-ink);
+    font-weight: 700;
+    box-shadow:
+        0 0 0 4px rgb(255 255 255 / 0.45),
+        0 6px 16px rgb(43 33 24 / 0.25);
+    transition: transform 0.15s ease;
+}
+
+.pin:hover,
+.pin[aria-expanded='true'] {
+    transform: scale(1.1);
+    background: var(--color-ink);
+    color: var(--color-cream);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .pin::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        border: 2px solid #fff;
+        animation: pin-pulse 2.4s ease-out infinite;
+    }
+}
+
+@keyframes pin-pulse {
+    from {
+        transform: scale(1);
+        opacity: 0.9;
+    }
+    to {
+        transform: scale(1.7);
+        opacity: 0;
+    }
+}

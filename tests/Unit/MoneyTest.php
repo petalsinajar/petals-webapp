@@ -14,6 +14,15 @@ class MoneyTest extends TestCase
         $this->assertSame(1, Money::percent(3, 33.4));
     }
 
+    public function test_format_shows_cedis_and_drops_zero_pesewas(): void
+    {
+        $this->assertSame('GH₵2,500', Money::format(250000));
+        $this->assertSame('GH₵1,200.50', Money::format(120050));
+        $this->assertSame('GH₵0.15', Money::format(15));
+        $this->assertSame('-GH₵15', Money::format(-1500));
+        $this->assertSame('EUR 10', Money::format(1000, 'EUR'));
+    }
+
     public function test_allocation_always_adds_up(): void
     {
         $parts = Money::allocate(1000, ['a' => 1, 'b' => 1, 'c' => 1]);

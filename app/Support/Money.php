@@ -7,6 +7,21 @@ namespace App\Support;
  */
 final class Money
 {
+    /** Display an amount, e.g. 120050 GHS -> "GH₵1,200.50"; whole amounts drop the decimals. */
+    public static function format(int $amountMinor, string $currency = 'GHS'): string
+    {
+        $symbol = match ($currency) {
+            'GHS' => 'GH₵',
+            'NGN' => '₦',
+            'USD' => '$',
+            default => $currency.' ',
+        };
+        $decimals = $amountMinor % 100 === 0 ? 0 : 2;
+        $sign = $amountMinor < 0 ? '-' : '';
+
+        return $sign.$symbol.number_format(abs($amountMinor) / 100, $decimals);
+    }
+
     /** Percentage of an amount, rounded half up to the nearest minor unit. */
     public static function percent(int $amountMinor, float $percent): int
     {

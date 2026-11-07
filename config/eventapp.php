@@ -60,4 +60,30 @@ return [
         // log | (add your provider, e.g. hubtel, arkesel)
         'driver' => env('SMS_DRIVER', 'log'),
     ],
+
+    // Public landing page and pre-launch waitlist.
+    'marketing' => [
+        'waitlist_per_minute' => 5,
+        'launch_window' => env('LAUNCH_WINDOW', 'early 2027'),
+        'launch_cities' => ['Accra', 'Kumasi', 'Takoradi', 'Tamale', 'Cape Coast'],
+        'event_types' => ['wedding' => 'Weddings', 'birthday' => 'Birthdays', 'corporate' => 'Corporate events'],
+        // Catalog category slugs a vendor can sign up under.
+        'vendor_categories' => [
+            'chairs' => 'Chairs & tables',
+            'tents' => 'Tents & canopies',
+            'decor' => 'Decor & florals',
+            'lighting' => 'Lighting',
+            'sound' => 'Sound & DJ',
+            'catering' => 'Catering equipment',
+            'kids' => 'Kids’ party',
+            'staging' => 'Staging',
+        ],
+        'contact_email' => 'hello@petalsinajar.com',
+        'instagram_handle' => 'petalsinajar',
+        'socials' => [
+            'Instagram' => 'https://instagram.com/petalsinajar',
+            'TikTok' => 'https://www.tiktok.com/@petalsinajar',
+            'X' => 'https://x.com/petalsinajar',
+        ],
+    ],
 ];
