@@ -3,6 +3,7 @@
 namespace App\Modules\Bookings\Services;
 
 use App\Modules\Bookings\Enums\BookingStatus;
+use App\Modules\Bookings\Events\BookingCreated;
 use App\Modules\Bookings\Models\Booking;
 use App\Modules\Bookings\Models\Checkout;
 use App\Modules\Bookings\Notifications\BookingRequested;
@@ -15,6 +16,7 @@ use App\Modules\Catalog\Data\VariantSnapshot;
 use App\Modules\Events\Models\Event;
 use App\Modules\Identity\Models\User;
 use App\Modules\Identity\Models\Vendor;
+use App\Support\Geo;
 use App\Support\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Arr;
@@ -104,6 +106,7 @@ class CheckoutService
             if ($booking->status === BookingStatus::PendingVendor) {
                 Notification::send($booking->vendor->managers()->get(), new BookingRequested($booking));
             }
+            BookingCreated::dispatch($booking->id, $booking->event_id, $booking->vendor_id);
         }
 
         return $checkout;
@@ -282,19 +285,10 @@ class CheckoutService
         $perKm = (int) Arr::get($vendor->delivery ?? [], 'per_km_minor', 0);
 
         if ($perKm > 0 && $vendor->base_lat !== null && $fulfilment['lat'] !== null) {
-            $fee += (int) ceil($this->distanceKm($vendor->base_lat, $vendor->base_lng, (float) $fulfilment['lat'], (float) $fulfilment['lng'])) * $perKm;
+            $fee += (int) ceil(Geo::distanceKm($vendor->base_lat, $vendor->base_lng, (float) $fulfilment['lat'], (float) $fulfilment['lng'])) * $perKm;
         }
 
         return $fee;
-    }
-
-    private function distanceKm(float $lat1, float $lng1, float $lat2, float $lng2): float
-    {
-        $dLat = deg2rad($lat2 - $lat1);
-        $dLng = deg2rad($lng2 - $lng1);
-        $a = sin($dLat / 2) ** 2 + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng / 2) ** 2;
-
-        return 6371 * 2 * atan2(sqrt($a), sqrt(1 - $a));
     }
 
     /** @param list<array<string, mixed>> $drafts */

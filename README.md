@@ -20,6 +20,7 @@ app/
     Bookings/   checkout, bookings, lifecycle, hold sweeper, completion
     Payments/   payment gateway (fake | Paystack), payments, append-only ledger, refunds
     Social/     posts with shop tags, follows, reactions, comments, feeds, notifications
+    Recommendations/  vendor suggestions for hosts' upcoming events (daily, queued)
   Filament/
     Admin/      users, vendor verification, bookings & disputes, post moderation
     Vendor/     inventory (MongoDB), booking schedule with accept/decline/dispatch/return
@@ -64,7 +65,8 @@ pending_vendor → accepted → confirmed → out_for_delivery → delivered →
 | Auth & me | `auth/otp`, `auth/verify`, `auth/refresh`, `auth/logout`, `GET/PATCH me`, `me/events`, `me/bookings`, `me/devices`, `me/dashboard-credentials` |
 | Vendors | `POST vendors`, `GET/PATCH vendors/{id}`, `vendors/{id}/members`, `vendors/{id}/items`, `vendors/{id}/calendar`, `vendors/{id}/blocks`, `vendors/{id}/bookings`, `vendors/{id}/post-tags` |
 | Catalog | `categories`, `items?category=&event_type=&q=&lat=&lng=`, `items/{id}`, `items/{id}/availability`, `items/{id}/posts`, `packages/{id}` |
-| Events | `POST events`, `events/{id}`, `events/{id}/members`, `PUT events/{id}/rsvp`, `events/{id}/posts`, `events/{id}/bookings` |
+| Events | `POST events`, `events/{id}`, `events/{id}/members`, `PUT events/{id}/rsvp`, `events/{id}/posts`, `events/{id}/bookings`, `events/{id}/suggestions` |
+| Suggestions | `POST suggestions/{id}/open`, `POST suggestions/{id}/dismiss`, `vendors/{id}/recommendation-stats?days=` |
 | Checkout | `POST checkouts`, `GET checkouts/{id}`, `POST checkouts/{id}/pay`, `POST webhooks/payments` |
 | Social | `feed/following`, `feed/discover?event_type=`, `posts`, `posts/{id}/reaction`, `posts/{id}/comments`, `posts/{id}/shop-taps`, `follows`, `notifications` |
 
@@ -87,7 +89,7 @@ php artisan db:seed
 php artisan db:seed --class=CatalogSeeder
 
 php artisan serve          # API on http://localhost:8000/v1
-php artisan queue:work     # or: php artisan horizon
+php artisan queue:work --queue=default,recommendations   # or: php artisan horizon
 php artisan schedule:work  # hold sweeper, completions, feed ranking
 ```
 
@@ -136,6 +138,18 @@ The server stays stateless: data lives in managed services, so a server can be r
    php artisan horizon:terminate
    ```
 5. **Daemons**: `php artisan horizon` and, when chat ships, `php artisan reverb:start`. **Scheduler**: enable it in Forge (runs `schedule:run` every minute).
+
+   **Horizon queues.** Jobs use two queues: `default` (notifications, feed fan-out, stock release) and `recommendations` (vendor suggestions: the daily `recommendations:run` fan-out, its notifications and booking attribution). Give `recommendations` its own supervisor in `config/horizon.php` with a low process count (1–2) and `'balance' => false`, so a big daily run never delays the `default` queue the API depends on:
+
+   ```php
+   'supervisor-recommendations' => [
+       'connection' => 'redis',
+       'queue' => ['recommendations'],
+       'maxProcesses' => 2,
+       'tries' => 3,
+       'timeout' => 120,
+   ],
+   ```
 6. **Paystack**: set the webhook URL to `https://your-domain/v1/webhooks/payments`.
 
 ## What's next

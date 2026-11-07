@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Modules\Bookings\Events\BookingCreated;
 use App\Modules\Bookings\Models\Booking;
 use App\Modules\Bookings\Policies\BookingPolicy;
 use App\Modules\Catalog\Availability\AvailabilityStore;
@@ -16,10 +17,12 @@ use App\Modules\Identity\Contracts\SmsSender;
 use App\Modules\Identity\Models\User;
 use App\Modules\Identity\Models\Vendor;
 use App\Modules\Identity\Policies\VendorPolicy;
+use App\Modules\Identity\Services\CbMessagingSmsSender;
 use App\Modules\Identity\Services\LogSmsSender;
 use App\Modules\Payments\Contracts\PaymentGateway;
 use App\Modules\Payments\Gateways\FakeGateway;
 use App\Modules\Payments\Gateways\PaystackGateway;
+use App\Modules\Recommendations\Listeners\MarkRecommendationBooked;
 use App\Modules\Social\Models\Comment;
 use App\Modules\Social\Models\Post;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -27,6 +30,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Event as Events;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -50,6 +54,7 @@ class AppServiceProvider extends ServiceProvider
         });
 
         $this->app->singleton(SmsSender::class, fn () => match (config('eventapp.sms.driver')) {
+            'cbmessaging' => CbMessagingSmsSender::fromConfig(),
             default => new LogSmsSender,
         });
     }
@@ -73,6 +78,9 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Vendor::class, VendorPolicy::class);
         Gate::policy(Event::class, EventPolicy::class);
         Gate::policy(Booking::class, BookingPolicy::class);
+
+        // Cross-module reactions. Listeners are queued, so they never slow the request.
+        Events::listen(BookingCreated::class, MarkRecommendationBooked::class);
 
         RateLimiter::for('api', fn (Request $request) => Limit::perMinute(120)->by($request->user()?->id ?: $request->ip()));
         RateLimiter::for('posting', fn (Request $request) => Limit::perMinute(10)->by($request->user()?->id ?: $request->ip()));

@@ -13,9 +13,13 @@ class InMemoryCatalogReader implements CatalogReader
     /** @var array<string, VariantSnapshot> keyed "item|variant" */
     private array $variants = [];
 
-    public function put(VariantSnapshot $variant): void
+    /** @var array<string, string> item id => category id */
+    private array $categories = [];
+
+    public function put(VariantSnapshot $variant, string $categoryId = 'chairs'): void
     {
         $this->variants[$variant->itemId.'|'.$variant->variantId] = $variant;
+        $this->categories[$variant->itemId] = $categoryId;
     }
 
     public function variant(string $itemId, string $variantId, int $qty = 1): ?VariantSnapshot
@@ -53,5 +57,17 @@ class InMemoryCatalogReader implements CatalogReader
         }
 
         return null;
+    }
+
+    public function activeVariantsInCategory(string $categoryId, array $vendorIds): array
+    {
+        return array_values(array_filter($this->variants, fn (VariantSnapshot $v) => $v->active
+            && ($this->categories[$v->itemId] ?? null) === $categoryId
+            && in_array($v->vendorId, $vendorIds, true)));
+    }
+
+    public function categoriesOf(array $itemIds): array
+    {
+        return array_intersect_key($this->categories, array_flip($itemIds));
     }
 }

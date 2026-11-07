@@ -37,12 +37,18 @@ class MeController extends Controller
             'settings' => ['sometimes', 'array'],
             'settings.notify.push' => ['sometimes', 'boolean'],
             'settings.notify.sms' => ['sometimes', 'boolean'],
+            'settings.notify.suggestions' => ['sometimes', 'boolean'],
         ]);
 
         if (isset($data['handle']) && HandleRegistry::normalize($data['handle']) !== $user->handle) {
             $this->handles->rename($user, $data['handle']);
         }
         unset($data['handle']);
+
+        // Settings are patched, not replaced: turning one notification off keeps the others.
+        if (isset($data['settings'])) {
+            $data['settings'] = array_replace_recursive($user->settings ?? [], $data['settings']);
+        }
 
         $user->fill($data)->save();
 

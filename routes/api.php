@@ -11,6 +11,7 @@ use App\Modules\Identity\Http\Controllers\ProfileController;
 use App\Modules\Identity\Http\Controllers\VendorController;
 use App\Modules\Identity\Http\Controllers\VendorMemberController;
 use App\Modules\Payments\Http\Controllers\PaymentWebhookController;
+use App\Modules\Recommendations\Http\Controllers\SuggestionController;
 use App\Modules\Social\Http\Controllers\CommentController;
 use App\Modules\Social\Http\Controllers\FeedController;
 use App\Modules\Social\Http\Controllers\FollowController;
@@ -76,6 +77,7 @@ Route::middleware(['auth:sanctum', 'abilities:access', 'active', 'throttle:api']
         Route::delete('blocks/{reservation}', [VendorInventoryController::class, 'unblock']);
 
         Route::get('bookings', [BookingController::class, 'forVendor']);
+        Route::get('recommendation-stats', [SuggestionController::class, 'vendorStats']);
         Route::get('post-tags', [PostTagController::class, 'index']);
         Route::post('post-tags/{tag}', [PostTagController::class, 'update']);
     });
@@ -97,6 +99,11 @@ Route::middleware(['auth:sanctum', 'abilities:access', 'active', 'throttle:api']
     Route::put('events/{event}/rsvp', [EventController::class, 'rsvp']);
     Route::get('events/{event}/posts', [FeedController::class, 'event']);
     Route::get('events/{event}/bookings', [BookingController::class, 'forEvent']);
+
+    // Vendor suggestions for hosts
+    Route::get('events/{event}/suggestions', [SuggestionController::class, 'index']);
+    Route::post('suggestions/{recommendation}/open', [SuggestionController::class, 'open'])->whereUlid('recommendation');
+    Route::post('suggestions/{recommendation}/dismiss', [SuggestionController::class, 'dismiss'])->whereUlid('recommendation');
 
     // Checkout and bookings
     Route::post('checkouts', [CheckoutController::class, 'store']);

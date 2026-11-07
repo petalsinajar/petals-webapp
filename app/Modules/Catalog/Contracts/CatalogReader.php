@@ -22,4 +22,21 @@ interface CatalogReader
 
     /** Vendor id that owns an item, or null if it doesn't exist. */
     public function vendorOf(string $itemId): ?string;
+
+    /**
+     * Active variants of active items in one category (exact match), for the given vendors.
+     * Prices are the single-unit price.
+     *
+     * @param  list<string>  $vendorIds
+     * @return list<VariantSnapshot>
+     */
+    public function activeVariantsInCategory(string $categoryId, array $vendorIds): array;
+
+    /**
+     * Category of each item that exists.
+     *
+     * @param  list<string>  $itemIds
+     * @return array<string, string> item id => category id
+     */
+    public function categoriesOf(array $itemIds): array;
 }

@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Identity\Models\OtpCode;
 use Illuminate\Support\Facades\Schedule;
 
 /*
@@ -16,7 +17,13 @@ Schedule::command('bookings:complete-returned')->hourly()->withoutOverlapping()-
 // Discover ranking.
 Schedule::command('posts:rescore')->everyFiveMinutes()->withoutOverlapping()->onOneServer();
 
+// Vendor suggestions for upcoming events: queues jobs on the "recommendations" queue.
+Schedule::command('recommendations:run')
+    ->dailyAt(config('eventapp.recommendations.run_at'))
+    ->timezone(config('eventapp.business_timezone'))
+    ->withoutOverlapping()->onOneServer();
+
 // Housekeeping.
 Schedule::command('sanctum:prune-expired --hours=24')->daily();
-Schedule::command('model:prune', ['--model' => [\App\Modules\Identity\Models\OtpCode::class]])->daily();
+Schedule::command('model:prune', ['--model' => [OtpCode::class]])->daily();
 Schedule::command('horizon:snapshot')->everyFiveMinutes();

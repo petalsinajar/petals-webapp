@@ -18,13 +18,48 @@ class MongoCatalogReader implements CatalogReader
             return null;
         }
 
+        return $this->snapshot($item, $variant, $qty);
+    }
+
+    public function activeVariantsInCategory(string $categoryId, array $vendorIds): array
+    {
+        if ($vendorIds === []) {
+            return [];
+        }
+
+        return Item::where('category_id', $categoryId)
+            ->whereIn('vendor_id', array_values($vendorIds))
+            ->where('status', 'active')
+            ->get()
+            ->flatMap(fn (Item $item) => collect($item->variants ?? [])
+                ->filter(fn (array $variant) => (bool) ($variant['active'] ?? true))
+                ->map(fn (array $variant) => $this->snapshot($item, $variant, 1)))
+            ->values()
+            ->all();
+    }
+
+    public function categoriesOf(array $itemIds): array
+    {
+        $ids = array_values(array_unique(array_filter($itemIds, fn ($id) => preg_match('/^[a-f0-9]{24}$/', $id))));
+        if ($ids === []) {
+            return [];
+        }
+
+        return Item::whereIn('_id', $ids)->get(['_id', 'category_id'])
+            ->mapWithKeys(fn (Item $item) => [$item->id => (string) $item->category_id])
+            ->all();
+    }
+
+    /** @param  array<string, mixed>  $variant */
+    private function snapshot(Item $item, array $variant, int $qty): VariantSnapshot
+    {
         return new VariantSnapshot(
             itemId: $item->id,
-            variantId: $variantId,
+            variantId: $variant['variant_id'],
             vendorId: $item->vendor_id,
             title: trim($item->title.' ('.$variant['name'].')'),
             quantity: (int) $variant['quantity'],
-            unitPriceMinor: $item->unitPriceFor($qty, $variantId),
+            unitPriceMinor: $item->unitPriceFor($qty, $variant['variant_id']),
             currency: $item->currency(),
             minQty: (int) $item->min_qty,
             damageDepositMinor: (int) $item->damage_deposit_minor,

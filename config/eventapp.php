@@ -57,8 +57,65 @@ return [
     ],
 
     'sms' => [
-        // log | (add your provider, e.g. hubtel, arkesel)
+        // log | cbmessaging. Local and testing never send (see OtpService).
         'driver' => env('SMS_DRIVER', 'log'),
+
+        'cbmessaging' => [
+            'url' => env('CBMESSAGING_URL', 'https://cbmessaging.com/api/v1/'),
+            'key' => env('SMS_KEY'),
+            'secret' => env('SMS_SECRET'),
+            // Must be registered with CB Messaging; at most 11 characters.
+            'sender_id' => env('SMS_SENDER_ID'),
+        ],
+    ],
+
+    // Vendor suggestions for hosts' upcoming events (app/Modules/Recommendations).
+    'recommendations' => [
+        'enabled' => (bool) env('RECOMMENDATIONS_ENABLED', true),
+        'queue' => 'recommendations',
+        // When the daily run starts, in business_timezone. Sends still wait for each event's daytime.
+        'run_at' => '03:00',
+
+        // What a typical event of each type rents, in priority order. "other" gets no suggestions.
+        'required_categories' => [
+            'wedding' => ['chairs', 'tables', 'tents', 'decor', 'lighting', 'sound'],
+            'birthday' => ['chairs', 'tables', 'decor', 'kids'],
+            'corporate' => ['chairs', 'tables', 'staging', 'sound'],
+        ],
+
+        // Days are counted until the event starts. Outside every stage nothing is sent.
+        'stages' => [
+            'checklist' => ['created_within_hours' => 48], // just after the event is created
+            'missing_category' => ['from_days' => 56, 'to_days' => 14],
+            'last_call' => ['from_days' => 11, 'to_days' => 7],
+        ],
+
+        'max_notifications_per_event_per_week' => 2,
+        'max_vendors_per_notification' => 3,
+        // Stop suggesting a category for an event after this many vendors, or this many dismissals.
+        'max_vendors_per_category' => 6,
+        'stop_category_after_dismissals' => 2,
+        // No sends in this window, in the event's timezone. May wrap midnight.
+        'quiet_hours' => ['start' => '21:00', 'end' => '08:00'],
+
+        // Rough quantity per guest when estimating cost against the budget. Other categories count as 1 unit.
+        'units_per_guest' => ['chairs' => 1, 'tables' => 0.1],
+        // A vendor fits the budget if the estimated cost is at most this share of it.
+        'max_budget_share' => 0.4,
+
+        // Fairness: vendors recommended less often in this window get a boost.
+        'fairness_window_days' => 30,
+        'fairness_cap' => 20,
+        // Score = weighted sum of components, each 0..1.
+        'weights' => ['rating' => 0.25, 'experience' => 0.15, 'distance' => 0.2, 'price' => 0.15, 'fairness' => 0.25],
+
+        // Add 'fcm' (or your push channel) here when push ships; the payload already has title/body/deep_link.
+        'channels' => ['database'],
+        'deep_link' => 'petalsinajar://events/{event}/suggestions',
+        'category_labels' => [
+            'chairs' => 'chair', 'tables' => 'table', 'tents' => 'tent', 'decor' => 'decor',
+            'lighting' => 'lighting', 'sound' => 'sound', 'kids' => 'kids’ party', 'staging' => 'staging',
+        ],
     ],
 
     // Public landing page and pre-launch waitlist.

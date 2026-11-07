@@ -19,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withCommands([
         __DIR__.'/../app/Modules/Bookings/Console',
         __DIR__.'/../app/Modules/Social/Console',
+        __DIR__.'/../app/Modules/Recommendations/Console',
     ])
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([

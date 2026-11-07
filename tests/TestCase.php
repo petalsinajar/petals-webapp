@@ -37,7 +37,7 @@ abstract class TestCase extends BaseTestCase
     }
 
     /** Register a rentable variant in the in-memory catalog. */
-    protected function variant(Vendor $vendor, array $overrides = []): VariantSnapshot
+    protected function variant(Vendor $vendor, array $overrides = [], string $category = 'chairs'): VariantSnapshot
     {
         $snapshot = new VariantSnapshot(...array_merge([
             'itemId' => bin2hex(random_bytes(12)),
@@ -54,7 +54,7 @@ abstract class TestCase extends BaseTestCase
             'active' => true,
         ], $overrides));
 
-        $this->catalog()->put($snapshot);
+        $this->catalog()->put($snapshot, $category);
 
         return $snapshot;
     }
