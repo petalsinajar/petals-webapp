@@ -19,7 +19,7 @@ class DatabaseSeeder extends Seeder
         // Admin dashboard: /admin  (admin@eventapp.test / password)
         User::factory()->admin()->create([
             'handle' => 'admin.team',
-            'display_name' => 'Event App Admin',
+            'display_name' => 'Petalsinajar Admin',
             'phone' => '+233200000001',
             'email' => 'admin@eventapp.test',
         ]);

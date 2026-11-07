@@ -1,4 +1,4 @@
-# Event App API — guide for coding assistants
+# Petalsinajar API — guide for coding assistants
 
 Laravel 13 + Filament 5 backend for a social events app with built-in rentals. Read README.md first.
 

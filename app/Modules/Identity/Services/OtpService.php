@@ -28,7 +28,7 @@ class OtpService
         ]);
 
         if (! $this->usesDevCode()) {
-            $this->sms->send($phone, "Your Event App code is {$code}. It expires in ".config('eventapp.auth.otp_ttl_minutes').' minutes.');
+            $this->sms->send($phone, "Your Petalsinajar code is {$code}. It expires in ".config('eventapp.auth.otp_ttl_minutes').' minutes.');
         }
     }
 

@@ -3,7 +3,7 @@
 return [
 
     /*
-    | Business rules for Event App. Money is always in minor units (pesewas).
+    | Business rules for Petalsinajar. Money is always in minor units (pesewas).
     */
 
     'currency' => env('APP_CURRENCY', 'GHS'),

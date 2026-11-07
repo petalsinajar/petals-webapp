@@ -1,6 +1,6 @@
-# Event App API
+# Petalsinajar API
 
-Backend for Event App (working name): a social app for weddings, birthdays and corporate events, with built-in rentals. Hosts create events and post photos; anyone can rent the chairs, tents, decor and sound they see in posts; vendors run their business from the same app or a web dashboard.
+Backend for Petalsinajar: a social app for weddings, birthdays and corporate events, with built-in rentals. Hosts create events and post photos; anyone can rent the chairs, tents, decor and sound they see in posts; vendors run their business from the same app or a web dashboard.
 
 - **Laravel 13** REST API under `/v1` for the Flutter app (Sanctum bearer tokens)
 - **Filament 5** dashboards: `/admin` (platform team) and `/vendor/{handle}` (vendors, multi-tenant)

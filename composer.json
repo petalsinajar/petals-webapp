@@ -2,7 +2,7 @@
     "$schema": "https://getcomposer.org/schema.json",
     "name": "event-app/api",
     "type": "project",
-    "description": "Event App backend: social events with built-in rentals.",
+    "description": "Petalsinajar backend: social events with built-in rentals.",
     "keywords": [
         "laravel",
         "framework"

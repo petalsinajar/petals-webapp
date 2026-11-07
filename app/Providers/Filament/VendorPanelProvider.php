@@ -31,7 +31,7 @@ class VendorPanelProvider extends PanelProvider
             ->id('vendor')
             ->path('vendor')
             ->login()
-            ->brandName('Event App for Vendors')
+            ->brandName('Petalsinajar for Vendors')
             ->colors(['primary' => Color::Amber])
             ->tenant(Vendor::class, slugAttribute: 'handle', ownershipRelationship: 'vendor')
             ->discoverResources(in: app_path('Filament/Vendor/Resources'), for: 'App\\Filament\\Vendor\\Resources')
