@@ -10,6 +10,7 @@ use App\Modules\Payments\Models\LedgerEntry;
 use App\Modules\Payments\Models\Payment;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 class CheckoutFlowTest extends TestCase
@@ -34,7 +35,7 @@ class CheckoutFlowTest extends TestCase
         $this->event = Event::factory()->create(['host_id' => $this->host->id, 'starts_at' => now()->addDays(30), 'ends_at' => now()->addDays(30)->addHours(6)]);
     }
 
-    private function checkout(array $lines, array $extra = []): \Illuminate\Testing\TestResponse
+    private function checkout(array $lines, array $extra = []): TestResponse
     {
         $this->signIn($this->host);
 
@@ -110,6 +111,38 @@ class CheckoutFlowTest extends TestCase
         $day = $this->event->starts_at->setTimezone('Africa/Accra')->toDateString();
         $this->assertSame(200, $this->store()->remaining($chairs->variantId, 200, [$day])[$day]);
         $this->assertSame(0, Booking::count());
+    }
+
+    public function test_a_failure_while_writing_bookings_rolls_back_the_stock_too(): void
+    {
+        $chairs = $this->variant($this->vendor, ['quantity' => 200]);
+        $speakers = $this->variant(Vendor::factory()->ownedBy()->create(), ['quantity' => 10]);
+
+        // Stock is reserved first; then writing the second booking blows up.
+        $written = 0;
+        Booking::creating(function () use (&$written) {
+            if (++$written === 2) {
+                throw new \RuntimeException('database went away');
+            }
+        });
+
+        $this->withoutExceptionHandling();
+        try {
+            $this->checkout([
+                ['item_id' => $chairs->itemId, 'variant_id' => $chairs->variantId, 'qty' => 100],
+                ['item_id' => $speakers->itemId, 'variant_id' => $speakers->variantId, 'qty' => 5],
+            ]);
+            $this->fail('Expected the checkout to fail');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('database went away', $e->getMessage());
+        }
+
+        $day = $this->event->starts_at->setTimezone('Africa/Accra')->toDateString();
+        $this->assertSame(200, $this->store()->remaining($chairs->variantId, 200, [$day])[$day]);
+        $this->assertSame(10, $this->store()->remaining($speakers->variantId, 10, [$day])[$day]);
+        $this->assertDatabaseCount('reservations', 0);
+        $this->assertDatabaseCount('checkouts', 0);
+        $this->assertDatabaseCount('bookings', 0);
     }
 
     public function test_two_hosts_cannot_book_the_last_chairs(): void

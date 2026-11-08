@@ -99,13 +99,6 @@ return [
             'sslmode' => env('DB_SSLMODE', 'prefer'),
         ],
 
-        // Inventory only: categories, items, packages, availability_days, reservations.
-        'mongodb' => [
-            'driver' => 'mongodb',
-            'dsn' => env('MONGODB_URI', 'mongodb://127.0.0.1:27017/?replicaSet=rs0'),
-            'database' => env('MONGODB_DATABASE', 'event_app'),
-        ],
-
         'sqlsrv' => [
             'driver' => 'sqlsrv',
             'url' => env('DB_URL'),

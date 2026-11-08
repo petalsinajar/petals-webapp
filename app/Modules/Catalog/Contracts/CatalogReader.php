@@ -6,7 +6,7 @@ use App\Modules\Catalog\Data\VariantSnapshot;
 
 /**
  * What other modules (bookings, social) are allowed to read from the catalog.
- * Keeps MongoDB details inside the Catalog module.
+ * Other modules never query the inventory tables themselves; they go through this.
  */
 interface CatalogReader
 {

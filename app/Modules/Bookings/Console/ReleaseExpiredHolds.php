@@ -11,10 +11,8 @@ use Illuminate\Console\Command;
 
 /**
  * Runs every minute. Releases holds that ran out (cart abandoned, vendor didn't respond,
- * deposit not paid) and expires the bookings they belonged to.
- *
- * A TTL index is deliberately not used: deleting the document would skip decrementing
- * the day counters.
+ * deposit not paid) and expires the bookings they belonged to. Holds carry their own
+ * expiry, so this works even if nothing else ever touches the booking again.
  */
 class ReleaseExpiredHolds extends Command
 {

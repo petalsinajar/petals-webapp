@@ -4,8 +4,7 @@ Backend for Petalsinajar: a social app for weddings, birthdays and corporate eve
 
 - **Laravel 13** REST API under `/v1` for the Flutter app (Sanctum bearer tokens)
 - **Filament 5** dashboards: `/admin` (platform team) and `/vendor/{handle}` (vendors, multi-tenant)
-- **PostgreSQL** for accounts, events, bookings, money and social data
-- **MongoDB** for inventory only: categories, items, packages, and the stock ledger
+- **PostgreSQL + PostGIS**, one database for everything: accounts, events, inventory and the stock ledger, bookings, money and social data
 
 ## How it's organised
 
@@ -15,7 +14,7 @@ One Laravel app split into modules. Each module owns its models, HTTP layer and 
 app/
   Modules/
     Identity/   users, vendors, vendor_members, @handles, phone OTP, tokens
-    Catalog/    MongoDB items/variants/packages + Availability (the stock ledger)
+    Catalog/    categories, items, variants, packages + Availability (the stock ledger)
     Events/     events, guests, RSVPs
     Bookings/   checkout, bookings, lifecycle, hold sweeper, completion
     Payments/   payment gateway (fake | Paystack), payments, append-only ledger, refunds
@@ -23,26 +22,24 @@ app/
     Recommendations/  vendor suggestions for hosts' upcoming events (daily, queued)
   Filament/
     Admin/      users, vendor verification, bookings & disputes, post moderation
-    Vendor/     inventory (MongoDB), booking schedule with accept/decline/dispatch/return
-  Support/      Money (minor units), Actor (user|vendor), PhoneNumber, Paginated
+    Vendor/     inventory with variants, booking schedule with accept/decline/dispatch/return
+  Support/      Money (minor units), Actor (user|vendor), PhoneNumber, Paginated, Geo (service areas)
 ```
 
 Rules that hold everywhere:
 
 1. **Money is integer minor units** (`*_minor`, pesewas for GHS). Never floats.
-2. **Stock is quantity over time.** Each variant has a quantity; reservations take part of it for a date window. Checking and reserving happen in one MongoDB transaction, so the last 50 chairs can't be sold twice.
+2. **Stock is quantity over time.** Each variant has a quantity; reservations take part of it for a date window. Reserving is a guarded `UPDATE` on a per-day counter (`reserved + qty <= capacity`), so the last 50 chairs can't be sold twice.
 3. **Bookings snapshot what was sold**: titles, unit prices and the vendor's cancellation policy are copied at booking time.
 4. **Vendors are social actors.** Posts, follows and comments have an author that is a user or a vendor (`{type, id}`).
 5. **One account, many roles.** A user can belong to several vendors as `owner`, `manager` or `staff`, checked on every request.
+6. **All ids are ULIDs**, including items and variants; foreign keys are real.
 
-## Booking across two databases
+## Stock and bookings
 
-Stock lives in MongoDB and bookings in PostgreSQL, so a booking can't be one transaction. `CheckoutService` does it in a safe order:
+Stock and bookings share one database, so a checkout is **one transaction**: `CheckoutService` reserves every line as a **hold** (all-or-nothing across vendors), then writes the checkout, bookings and lines. Out of stock or any failure rolls all of it back.
 
-1. Build every booking and generate its id.
-2. Reserve all stock in MongoDB as **holds** carrying those ids (all-or-nothing across vendors).
-3. Write the checkout and bookings to PostgreSQL.
-4. If step 3 fails, release the holds. If the process dies in between, the holds expire and `inventory:release-expired-holds` frees them.
+`SqlAvailabilityStore` keeps one row per variant per day in `availability_days`. Reserving inserts the day's counter if it's missing, then runs `UPDATE … SET reserved = reserved + ? WHERE reserved + ? <= capacity`; zero rows updated means that day is sold out (409). Counters are always touched in `(variant_id, day)` order, so concurrent checkouts can't deadlock. Releasing and confirming are conditional on the reservation's status, so repeating them is harmless. Booking status changes release stock inside the same transaction (`BookingService::transition`).
 
 Holds last until the vendor responds (24 h), then until the deposit is paid (24 h). Instant-book items skip vendor approval with a 15-minute hold. A successful payment webhook turns the hold into a booking reservation; returning the items releases it.
 
@@ -63,8 +60,8 @@ pending_vendor → accepted → confirmed → out_for_delivery → delivered →
 | Area | Main routes |
 | --- | --- |
 | Auth & me | `auth/otp`, `auth/verify`, `auth/refresh`, `auth/logout`, `GET/PATCH me`, `me/events`, `me/bookings`, `me/devices`, `me/dashboard-credentials` |
-| Vendors | `POST vendors`, `GET/PATCH vendors/{id}`, `vendors/{id}/members`, `vendors/{id}/items`, `vendors/{id}/calendar`, `vendors/{id}/blocks`, `vendors/{id}/bookings`, `vendors/{id}/post-tags` |
-| Catalog | `categories`, `items?category=&event_type=&q=&lat=&lng=`, `items/{id}`, `items/{id}/availability`, `items/{id}/posts`, `packages/{id}` |
+| Vendors | `vendors?lat=&lng=&category=&event_type=` (serving that venue, nearest first), `POST vendors`, `GET/PATCH vendors/{id}`, `vendors/{id}/members`, `vendors/{id}/items`, `vendors/{id}/calendar`, `vendors/{id}/blocks`, `vendors/{id}/bookings`, `vendors/{id}/post-tags` |
+| Catalog | `categories`, `items?category=&event_type=&q=&lat=&lng=` (lat/lng: vendors whose own radius covers the point), `items/{id}`, `items/{id}/availability`, `items/{id}/posts`, `packages/{id}` |
 | Events | `POST events`, `events/{id}`, `events/{id}/members`, `PUT events/{id}/rsvp`, `events/{id}/posts`, `events/{id}/bookings`, `events/{id}/suggestions` |
 | Suggestions | `POST suggestions/{id}/open`, `POST suggestions/{id}/dismiss`, `vendors/{id}/recommendation-stats?days=` |
 | Checkout | `POST checkouts`, `GET checkouts/{id}`, `POST checkouts/{id}/pay`, `POST webhooks/payments` |
@@ -72,7 +69,16 @@ pending_vendor → accepted → confirmed → out_for_delivery → delivered →
 
 ## Local setup
 
-Requirements: PHP 8.3+ with the `mongodb`, `pdo_pgsql`, `intl` and `redis` extensions; Composer; PostgreSQL; Redis; MongoDB **running as a replica set** (transactions need it).
+Requirements: PHP 8.3+ with the `pdo_pgsql`, `intl` and `redis` extensions; Composer; PostgreSQL 15+ with **PostGIS 3**; Redis.
+
+PostgreSQL with PostGIS, any of:
+
+```bash
+brew install postgresql@17 postgis && brew services start postgresql@17   # macOS
+docker run -d --name petals-db -e POSTGRES_PASSWORD=secret -p 5432:5432 postgis/postgis:17-3.5
+```
+
+Create the database (`createdb event_app`) and set `DB_*` in `.env`. The first migration runs `CREATE EXTENSION IF NOT EXISTS postgis`, which needs a role allowed to create extensions (the default `postgres` user is).
 
 ```bash
 composer install
@@ -84,16 +90,12 @@ php artisan horizon:install            # queue dashboard + config/horizon.php
 php artisan install:broadcasting --reverb   # real-time chat later; answer "no" to the frontend prompts
 
 php artisan migrate
-php artisan migrate --database=mongodb --path=database/migrations/mongodb
-php artisan db:seed
-php artisan db:seed --class=CatalogSeeder
+php artisan db:seed        # users, vendors, an event, categories and demo items
 
 php artisan serve          # API on http://localhost:8000/v1
 php artisan queue:work --queue=default,recommendations   # or: php artisan horizon
 php artisan schedule:work  # hold sweeper, completions, feed ranking
 ```
-
-A single-node local MongoDB replica set: start `mongod --replSet rs0`, then run `rs.initiate()` once in `mongosh`. A free MongoDB Atlas cluster works too.
 
 Seeded logins (local only; OTP is always `123456` and no SMS is sent):
 
@@ -111,12 +113,13 @@ Payments locally use the fake gateway: `POST /v1/checkouts/{id}/pay` returns a p
 php artisan test
 ```
 
-The suite runs on SQLite in memory with inventory in memory (`INVENTORY_DRIVER=memory`), so MongoDB isn't needed. It covers sign-in and token rotation, vendor roles, the full booking lifecycle through payout, all-or-nothing checkout, overselling, hold expiry, refunds, feeds, shop-tag approval, likes, comments, ranking and both dashboards.
+The suite runs on SQLite in memory by default, with the real SQL stock ledger and catalog (location matching uses a bounding box + haversine there instead of PostGIS). It covers sign-in and token rotation, vendor roles, the full booking lifecycle through payout, all-or-nothing checkout, overselling and the reservation rules, quantity-change warnings, variant deactivation, blocks, service-area matching, hold expiry, refunds, feeds, shop-tag approval, likes, comments, ranking and both dashboards.
 
-To check the production MongoDB stock ledger against a real replica set:
+Run the same suite on PostgreSQL + PostGIS (use a throwaway database; tests reset it):
 
 ```bash
-MONGODB_TEST_URI="mongodb://127.0.0.1:27017/?replicaSet=rs0" php artisan test --testsuite=Integration
+createdb event_app_test
+DB_CONNECTION=pgsql DB_DATABASE=event_app_test DB_USERNAME=postgres DB_PASSWORD=secret php artisan test
 ```
 
 ## Deploying: Forge on EC2
@@ -124,22 +127,24 @@ MONGODB_TEST_URI="mongodb://127.0.0.1:27017/?replicaSet=rs0" php artisan test --
 The server stays stateless: data lives in managed services, so a server can be replaced at any time.
 
 1. **Managed data** in one AWS region close to your users:
-   - PostgreSQL on **Amazon RDS** (automated backups on).
-   - **MongoDB Atlas** cluster hosted on AWS in the same region; allow the EC2 server's IP.
+   - PostgreSQL 15+ on **Amazon RDS** (automated backups on). RDS ships PostGIS; enable it once, as the master user, before the first deploy:
+     ```sql
+     CREATE EXTENSION IF NOT EXISTS postgis;
+     ```
+     (The migration also runs this, but the app's database user usually lacks the `rds_superuser` rights it needs.)
    - **S3** bucket (plus CloudFront) for media. Redis on the server is fine to start; move to ElastiCache when you add a second server.
-2. **Forge**: connect your AWS account, create an app server (2 vCPU / 4 GB is plenty to start) with PHP 8.3+, and install the `mongodb` PHP extension on it (`sudo pecl install mongodb`, then enable it for FPM and CLI).
-3. **Site**: point it at your Git repository, set the environment from `.env.example` with production values (`APP_ENV=production`, `APP_DEBUG=false`, RDS and Atlas credentials, `PAYMENT_GATEWAY=paystack`, `FILESYSTEM_DISK=s3`), and enable HTTPS with Let's Encrypt.
+2. **Forge**: connect your AWS account, create an app server (2 vCPU / 4 GB is plenty to start) with PHP 8.3+ (Forge's PHP includes `pdo_pgsql`).
+3. **Site**: point it at your Git repository, set the environment from `.env.example` with production values (`APP_ENV=production`, `APP_DEBUG=false`, `DB_CONNECTION=pgsql` with the RDS credentials and `DB_SSLMODE=require`, `PAYMENT_GATEWAY=paystack`, `FILESYSTEM_DISK=s3`), and enable HTTPS with Let's Encrypt.
 4. **Deploy script** (Forge's default, plus):
    ```bash
    php artisan migrate --force
-   php artisan migrate --force --database=mongodb --path=database/migrations/mongodb
    php artisan optimize
    php artisan filament:optimize
    php artisan horizon:terminate
    ```
 5. **Daemons**: `php artisan horizon` and, when chat ships, `php artisan reverb:start`. **Scheduler**: enable it in Forge (runs `schedule:run` every minute).
 
-   **Horizon queues.** Jobs use two queues: `default` (notifications, feed fan-out, stock release) and `recommendations` (vendor suggestions: the daily `recommendations:run` fan-out, its notifications and booking attribution). Give `recommendations` its own supervisor in `config/horizon.php` with a low process count (1–2) and `'balance' => false`, so a big daily run never delays the `default` queue the API depends on:
+   **Horizon queues.** Jobs use two queues: `default` (notifications, feed fan-out) and `recommendations` (vendor suggestions: the daily `recommendations:run` fan-out, its notifications and booking attribution). Give `recommendations` its own supervisor in `config/horizon.php` with a low process count (1–2) and `'balance' => false`, so a big daily run never delays the `default` queue the API depends on:
 
    ```php
    'supervisor-recommendations' => [

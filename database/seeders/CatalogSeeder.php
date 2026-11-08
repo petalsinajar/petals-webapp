@@ -8,29 +8,30 @@ use App\Modules\Identity\Models\Vendor;
 use Illuminate\Database\Seeder;
 
 /**
- * MongoDB categories and demo inventory for the seeded vendors.
- * Run after DatabaseSeeder:  php artisan db:seed --class=CatalogSeeder
+ * Categories and demo inventory for the seeded vendors. Runs as part of DatabaseSeeder;
+ * on its own (categories only if the demo vendors don't exist):
+ *   php artisan db:seed --class=CatalogSeeder
  */
 class CatalogSeeder extends Seeder
 {
     public function run(): void
     {
         $categories = [
-            ['_id' => 'seating', 'name' => 'Seating', 'parent_id' => null, 'icon' => 'chair', 'order' => 10],
-            ['_id' => 'chairs', 'name' => 'Chairs', 'parent_id' => 'seating', 'icon' => 'chair', 'order' => 11],
-            ['_id' => 'tables', 'name' => 'Tables', 'parent_id' => 'seating', 'icon' => 'table', 'order' => 12],
-            ['_id' => 'shelter', 'name' => 'Tents & canopies', 'parent_id' => null, 'icon' => 'tent', 'order' => 20],
-            ['_id' => 'tents', 'name' => 'Tents', 'parent_id' => 'shelter', 'icon' => 'tent', 'order' => 21],
-            ['_id' => 'decor', 'name' => 'Decor', 'parent_id' => null, 'icon' => 'sparkles', 'order' => 30],
-            ['_id' => 'lighting', 'name' => 'Lighting', 'parent_id' => 'decor', 'icon' => 'bulb', 'order' => 31],
-            ['_id' => 'sound', 'name' => 'Sound', 'parent_id' => null, 'icon' => 'speaker', 'order' => 40],
-            ['_id' => 'catering', 'name' => 'Catering equipment', 'parent_id' => null, 'icon' => 'utensils', 'order' => 50],
-            ['_id' => 'kids', 'name' => 'Kids’ party', 'parent_id' => null, 'icon' => 'balloon', 'order' => 60],
-            ['_id' => 'staging', 'name' => 'Staging', 'parent_id' => null, 'icon' => 'stage', 'order' => 70],
+            ['id' => 'seating', 'name' => 'Seating', 'parent_id' => null, 'icon' => 'chair', 'sort' => 10],
+            ['id' => 'chairs', 'name' => 'Chairs', 'parent_id' => 'seating', 'icon' => 'chair', 'sort' => 11],
+            ['id' => 'tables', 'name' => 'Tables', 'parent_id' => 'seating', 'icon' => 'table', 'sort' => 12],
+            ['id' => 'shelter', 'name' => 'Tents & canopies', 'parent_id' => null, 'icon' => 'tent', 'sort' => 20],
+            ['id' => 'tents', 'name' => 'Tents', 'parent_id' => 'shelter', 'icon' => 'tent', 'sort' => 21],
+            ['id' => 'decor', 'name' => 'Decor', 'parent_id' => null, 'icon' => 'sparkles', 'sort' => 30],
+            ['id' => 'lighting', 'name' => 'Lighting', 'parent_id' => 'decor', 'icon' => 'bulb', 'sort' => 31],
+            ['id' => 'sound', 'name' => 'Sound', 'parent_id' => null, 'icon' => 'speaker', 'sort' => 40],
+            ['id' => 'catering', 'name' => 'Catering equipment', 'parent_id' => null, 'icon' => 'utensils', 'sort' => 50],
+            ['id' => 'kids', 'name' => 'Kids’ party', 'parent_id' => null, 'icon' => 'balloon', 'sort' => 60],
+            ['id' => 'staging', 'name' => 'Staging', 'parent_id' => null, 'icon' => 'stage', 'sort' => 70],
         ];
 
         foreach ($categories as $category) {
-            Category::updateOrCreate(['_id' => $category['_id']], $category);
+            Category::updateOrCreate(['id' => $category['id']], $category);
         }
 
         $royal = Vendor::where('handle', 'royal.canopies')->first();
@@ -59,7 +60,7 @@ class CatalogSeeder extends Seeder
             $tiers[] = ['min_qty' => $bulkQty, 'price_minor' => $bulkPrice];
         }
 
-        Item::create([
+        $item = Item::create([
             'vendor_id' => $vendor->id,
             'category_id' => $category,
             'title' => $title,
@@ -67,13 +68,17 @@ class CatalogSeeder extends Seeder
             'media' => [],
             'event_types' => ['wedding', 'birthday', 'corporate'],
             'tags' => [],
-            'pricing' => ['unit' => 'per_event', 'currency' => 'GHS', 'tiers' => $tiers],
+            'pricing_unit' => 'per_event',
+            'price_tiers' => $tiers,
+            'currency' => 'GHS',
             'min_qty' => 1,
             'instant_book' => $instant,
             'requires_setup' => $requiresSetup,
-            'variants' => array_map(fn ($v) => ['name' => $v[0], 'quantity' => $v[1]], $variants),
-            'geo' => ['type' => 'Point', 'coordinates' => [(float) $vendor->base_lng, (float) $vendor->base_lat]],
             'status' => 'active',
         ]);
+
+        foreach ($variants as $sort => [$name, $quantity]) {
+            $item->variants()->create(['name' => $name, 'quantity' => $quantity, 'sort' => $sort]);
+        }
     }
 }

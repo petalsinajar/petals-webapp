@@ -140,7 +140,7 @@ class PaymentService
     }
 
     /**
-     * Payment arrived: hold → booking in MongoDB, then mark confirmed. If the hold already
+     * Payment arrived: hold → booking reservation, then mark confirmed. If the hold already
      * expired, try to reserve again; if the stock is gone, cancel with a full refund.
      */
     private function confirmStock(Booking $booking): void

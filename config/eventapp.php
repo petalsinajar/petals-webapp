@@ -8,9 +8,6 @@ return [
 
     'currency' => env('APP_CURRENCY', 'GHS'),
 
-    // mongodb (production) | memory (tests, or running the API without MongoDB)
-    'inventory_driver' => env('INVENTORY_DRIVER', 'mongodb'),
-
     // Where POST /v1/uploads stores images. `public` needs `php artisan storage:link`; use `s3` at scale.
     'uploads' => [
         'disk' => env('UPLOADS_DISK', 'public'),

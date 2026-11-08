@@ -5,8 +5,9 @@ namespace App\Modules\Catalog\Availability;
 use Carbon\CarbonImmutable;
 
 /**
- * The stock ledger. Reservations and the per-day counters they update live together
- * (MongoDB in production), so checking and reserving stock is one atomic step.
+ * The stock ledger. Reservations and the per-day counters they update live in the main
+ * database (SqlAvailabilityStore), so checking and reserving stock is one atomic step and can
+ * share a transaction with the bookings that need it.
  *
  * Every write is idempotent: releasing an already released reservation, or confirming an
  * already confirmed one, changes nothing.

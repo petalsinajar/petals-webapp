@@ -3,132 +3,107 @@
 namespace App\Modules\Catalog\Models;
 
 use App\Modules\Identity\Models\Vendor;
-use App\Modules\Catalog\Availability\AvailabilityStore;
-use Carbon\CarbonImmutable;
+use Database\Factories\ItemFactory;
+use Illuminate\Database\Eloquent\Concerns\HasUlids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Arr;
-use MongoDB\BSON\ObjectId;
-use MongoDB\Laravel\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * A rentable product. Each embedded variant is a stockable version with its own quantity,
- * and availability is always tracked per variant.
+ * A rentable product. Each variant is a stockable version with its own quantity, and
+ * availability is always tracked per variant.
  *
- * variants: [{ variant_id, name, sku, quantity, price_delta_minor, active }]
- * pricing:  { unit: per_event|per_day|per_hour, currency, tiers: [{ min_qty, price_minor }] }
+ * price_tiers: [{ min_qty, price_minor }] — the unit price drops as the quantity grows.
  *
  * @property string $id
  * @property string $vendor_id
- * @property array<int, array<string, mixed>> $variants
  */
 class Item extends Model
 {
-    protected $connection = 'mongodb';
-
-    protected $table = 'items';
+    /** @use HasFactory<ItemFactory> */
+    use HasFactory, HasUlids;
 
     protected $fillable = [
-        'vendor_id', 'category_id', 'title', 'description', 'media', 'item_attributes',
-        'event_types', 'tags', 'pricing', 'deposit_policy', 'damage_deposit_minor',
-        'min_qty', 'requires_setup', 'instant_book', 'variants', 'geo', 'status',
+        'vendor_id', 'category_id', 'title', 'description', 'media', 'specs', 'event_types', 'tags',
+        'pricing_unit', 'price_tiers', 'currency', 'deposit_policy', 'damage_deposit_minor',
+        'min_qty', 'requires_setup', 'instant_book', 'status',
     ];
 
+    /** Database defaults, mirrored so new models have them before a refresh. */
     protected $attributes = [
-        'status' => 'draft',
-        'min_qty' => 1,
+        'pricing_unit' => 'per_event',
         'damage_deposit_minor' => 0,
+        'min_qty' => 1,
         'requires_setup' => false,
         'instant_book' => false,
-        'stats' => ['bookings' => 0, 'saves' => 0, 'tagged_in_posts' => 0],
-        'rating' => ['avg' => 0, 'count' => 0],
+        'rating_avg' => 0,
+        'rating_count' => 0,
+        'bookings_count' => 0,
+        'saves_count' => 0,
+        'status' => 'draft',
     ];
 
     protected function casts(): array
     {
         return [
             'media' => 'array',
-            'item_attributes' => 'array',
+            'specs' => 'array',
             'event_types' => 'array',
             'tags' => 'array',
-            'pricing' => 'array',
+            'price_tiers' => 'array',
             'deposit_policy' => 'array',
-            'variants' => 'array',
-            'geo' => 'array',
-            'stats' => 'array',
-            'rating' => 'array',
             'damage_deposit_minor' => 'integer',
             'min_qty' => 'integer',
             'requires_setup' => 'boolean',
             'instant_book' => 'boolean',
+            'rating_avg' => 'float',
+            'rating_count' => 'integer',
+            'bookings_count' => 'integer',
+            'saves_count' => 'integer',
         ];
     }
 
-    /**
-     * Days where existing reservations now exceed a lowered stock level, filled after save.
-     *
-     * @var list<array{variant_id: string, days: list<string>}>
-     */
-    public array $capacityWarnings = [];
-
-    protected static function booted(): void
+    protected static function newFactory(): ItemFactory
     {
-        // Stock changes must reach the availability counters, whether they come from the API
-        // or the Filament dashboard.
-        static::updated(function (Item $item) {
-            $before = collect($item->getOriginal('variants') ?? [])->keyBy('variant_id');
-            $today = CarbonImmutable::now(config('eventapp.business_timezone'))->toDateString();
-            $store = app(AvailabilityStore::class);
-
-            foreach ($item->variants ?? [] as $variant) {
-                $old = $before->get($variant['variant_id']);
-                if ($old && (int) $old['quantity'] !== (int) $variant['quantity']) {
-                    $days = $store->setCapacity($variant['variant_id'], (int) $variant['quantity'], $today);
-                    if ($days) {
-                        $item->capacityWarnings[] = ['variant_id' => $variant['variant_id'], 'days' => $days];
-                    }
-                }
-            }
-        });
-
-        // Every variant gets a stable id the first time it's saved.
-        static::saving(function (Item $item) {
-            $item->variants = collect($item->variants ?? [])->map(function (array $variant) {
-                $variant['variant_id'] ??= (string) new ObjectId;
-                $variant['quantity'] = (int) ($variant['quantity'] ?? 0);
-                $variant['price_delta_minor'] = (int) ($variant['price_delta_minor'] ?? 0);
-                $variant['active'] = (bool) ($variant['active'] ?? true);
-
-                return $variant;
-            })->values()->all();
-        });
+        return ItemFactory::new();
     }
 
-    /** Cross-database relation: items live in MongoDB, vendors in SQL. */
+    /** @return BelongsTo<Vendor, $this> */
     public function vendor(): BelongsTo
     {
-        return $this->belongsTo(Vendor::class, 'vendor_id');
+        return $this->belongsTo(Vendor::class);
     }
 
-    /** @return array<string, mixed>|null */
-    public function variant(string $variantId): ?array
+    /** @return BelongsTo<Category, $this> */
+    public function category(): BelongsTo
     {
-        return collect($this->variants ?? [])->firstWhere('variant_id', $variantId);
+        return $this->belongsTo(Category::class);
+    }
+
+    /** @return HasMany<ItemVariant, $this> */
+    public function variants(): HasMany
+    {
+        return $this->hasMany(ItemVariant::class)->orderBy('sort')->orderBy('id');
     }
 
     /** Unit price in minor units for a quantity, using the best matching tier. */
-    public function unitPriceFor(int $qty, ?string $variantId = null): int
+    public function unitPriceFor(int $qty, ItemVariant|string|null $variant = null): int
     {
-        $tiers = collect(Arr::get($this->pricing, 'tiers', []))->sortByDesc('min_qty');
+        $tiers = collect($this->price_tiers ?? [])->sortByDesc('min_qty');
         $tier = $tiers->first(fn (array $t) => $qty >= (int) $t['min_qty']) ?? $tiers->last();
 
-        $delta = $variantId ? (int) ($this->variant($variantId)['price_delta_minor'] ?? 0) : 0;
+        if (is_string($variant)) {
+            $variant = $this->variants->firstWhere('id', $variant);
+        }
 
-        return max(0, (int) ($tier['price_minor'] ?? 0) + $delta);
+        return max(0, (int) ($tier['price_minor'] ?? 0) + (int) ($variant?->price_delta_minor ?? 0));
     }
 
     public function currency(): string
     {
-        return Arr::get($this->pricing, 'currency', config('eventapp.currency'));
+        // Read the column directly: with no value, $this->currency would look for a relation.
+        return $this->attributes['currency'] ?? config('eventapp.currency');
     }
 
     public function isActive(): bool

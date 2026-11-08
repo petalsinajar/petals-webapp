@@ -24,16 +24,16 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
-use Throwable;
 
 /**
- * Turns a cart into bookings, one per vendor, across both databases:
+ * Turns a cart into bookings, one per vendor, in ONE database transaction:
  *
- *   1. Build every booking in memory and generate its id up front.
- *   2. Reserve all stock in MongoDB as holds carrying those booking ids (all-or-nothing).
- *   3. Write the checkout and bookings to SQL.
- *   4. If step 3 fails, release the holds immediately. If the process dies in between,
- *      the holds simply expire and the sweeper releases them. Nothing gets stuck.
+ *   1. Build every booking in memory (prices, fees, the stock it needs).
+ *   2. Reserve all stock as holds carrying the booking ids (all-or-nothing across vendors).
+ *   3. Write the checkout, bookings and lines.
+ *
+ * Out of stock, or any failure while writing, rolls the whole thing back: no stray holds,
+ * no half-written checkout. Notifications go out after commit.
  */
 class CheckoutService
 {
@@ -54,51 +54,44 @@ class CheckoutService
         $drafts = $this->buildDrafts($event, $input);
         $currency = $this->singleCurrency($drafts);
 
-        $reservations = $this->store->reserveMany(collect($drafts)->flatMap(fn (array $d) => $d['requests'])->all());
+        $checkout = DB::transaction(function () use ($customer, $event, $drafts, $currency) {
+            $reservations = $this->store->reserveMany(collect($drafts)->flatMap(fn (array $d) => $d['requests'])->all());
 
-        try {
-            $checkout = DB::transaction(function () use ($customer, $event, $drafts, $reservations, $currency) {
-                $checkout = Checkout::create([
-                    'customer_id' => $customer->id,
-                    'event_id' => $event->id,
-                    'currency' => $currency,
-                    'total_minor' => array_sum(array_column($drafts, 'grand_total')),
-                    'status' => 'open',
-                ]);
+            $checkout = Checkout::create([
+                'customer_id' => $customer->id,
+                'event_id' => $event->id,
+                'currency' => $currency,
+                'total_minor' => array_sum(array_column($drafts, 'grand_total')),
+                'status' => 'open',
+            ]);
 
-                $i = 0;
-                foreach ($drafts as $draft) {
-                    /** @var Booking $booking */
-                    $booking = new Booking($draft['attributes']);
-                    $booking->id = $draft['id'];
-                    $booking->checkout_id = $checkout->id;
-                    $booking->customer_id = $customer->id;
-                    $booking->number = $this->nextNumber();
-                    $booking->save();
+            $i = 0;
+            foreach ($drafts as $draft) {
+                /** @var Booking $booking */
+                $booking = new Booking($draft['attributes']);
+                $booking->id = $draft['id'];
+                $booking->checkout_id = $checkout->id;
+                $booking->customer_id = $customer->id;
+                $booking->number = $this->nextNumber();
+                $booking->save();
 
-                    foreach ($draft['lines'] as $line) {
-                        $booking->lines()->create([...$line, 'reservation_id' => $reservations[$i++]->id]);
-                    }
-
-                    $booking->statusEvents()->create([
-                        'from_status' => null,
-                        'to_status' => $booking->status->value,
-                        'actor_id' => $customer->id,
-                        'note' => 'Requested',
-                        'created_at' => now(),
-                    ]);
+                foreach ($draft['lines'] as $line) {
+                    $booking->lines()->create([...$line, 'reservation_id' => $reservations[$i++]->id]);
                 }
 
-                $event->increment('bookings_count', count($drafts));
-
-                return $checkout;
-            });
-        } catch (Throwable $e) {
-            foreach ($reservations as $reservation) {
-                rescue(fn () => $this->store->release($reservation->id), report: true);
+                $booking->statusEvents()->create([
+                    'from_status' => null,
+                    'to_status' => $booking->status->value,
+                    'actor_id' => $customer->id,
+                    'note' => 'Requested',
+                    'created_at' => now(),
+                ]);
             }
-            throw $e;
-        }
+
+            $event->increment('bookings_count', count($drafts));
+
+            return $checkout;
+        });
 
         $checkout->load('bookings.lines', 'bookings.vendor', 'bookings.customer');
 
@@ -150,7 +143,7 @@ class CheckoutService
      */
     private function draft(Event $event, Vendor $vendor, array $lines, array $fulfilment, ?string $note): array
     {
-        $bookingId = (string) Str::ulid();
+        $bookingId = strtolower((string) Str::ulid());
         $deliverAt = CarbonImmutable::parse($fulfilment['deliver_at']);
         $collectAt = CarbonImmutable::parse($fulfilment['collect_at']);
 

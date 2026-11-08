@@ -34,8 +34,13 @@ class BookingStatusChanged extends Notification implements HasPushMessage, Shoul
         return new PushMessage(
             "Booking #{$this->booking->number}",
             $body,
-            // Customers land on the event it's for; vendor screens aren't built yet.
-            route: $isCustomer && $this->booking->event_id ? "/events/{$this->booking->event_id}" : null,
+            // Customers land on the event it's for; the vendor's team on the
+            // business's Requests tab.
+            route: match (true) {
+                $isCustomer && $this->booking->event_id !== null => "/events/{$this->booking->event_id}",
+                $isCustomer => null,
+                default => "/vendor/requests?vendor={$this->booking->vendor_id}",
+            },
             data: ['booking_id' => $this->booking->id],
         );
     }

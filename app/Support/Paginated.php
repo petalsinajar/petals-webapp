@@ -23,7 +23,7 @@ final class Paginated
     }
 
     /**
-     * For sources that are not Eloquent cursor paginators (e.g. MongoDB lists).
+     * For single-page lists that are not cursor paginated (e.g. nearest-first searches).
      *
      * @param  iterable<mixed>  $items
      * @param  class-string<JsonResource>  $resource

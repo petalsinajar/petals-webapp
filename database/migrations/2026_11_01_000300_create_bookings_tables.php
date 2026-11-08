@@ -61,17 +61,15 @@ return new class extends Migration
         Schema::create('booking_lines', function (Blueprint $table) {
             $table->ulid('id')->primary();
             $table->foreignUlid('booking_id')->constrained()->cascadeOnDelete();
-            $table->string('item_id', 24);       // MongoDB ObjectId
-            $table->string('variant_id', 24);    // MongoDB ObjectId
-            $table->string('package_id', 24)->nullable();
-            $table->string('reservation_id', 24)->nullable(); // MongoDB reservation holding the stock
+            $table->foreignUlid('item_id')->constrained();
+            $table->foreignUlid('variant_id')->constrained('item_variants');
+            $table->foreignUlid('package_id')->nullable()->constrained();
+            $table->foreignUlid('reservation_id')->nullable()->constrained()->nullOnDelete(); // the stock it holds
             $table->string('title_snapshot', 200);
             $table->unsignedInteger('qty');
             $table->unsignedBigInteger('unit_price_minor');
             $table->unsignedBigInteger('line_total_minor');
             $table->timestamps();
-
-            $table->index('item_id');
         });
 
         Schema::create('booking_status_events', function (Blueprint $table) {

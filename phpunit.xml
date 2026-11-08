@@ -11,9 +11,6 @@
         <testsuite name="Feature">
             <directory>tests/Feature</directory>
         </testsuite>
-        <testsuite name="Integration">
-            <directory>tests/Integration</directory>
-        </testsuite>
     </testsuites>
     <source>
         <include>
@@ -29,7 +26,6 @@
         <env name="DB_CONNECTION" value="sqlite"/>
         <env name="DB_DATABASE" value=":memory:"/>
         <env name="DB_URL" value=""/>
-        <env name="INVENTORY_DRIVER" value="memory"/>
         <env name="PAYMENT_GATEWAY" value="fake"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>

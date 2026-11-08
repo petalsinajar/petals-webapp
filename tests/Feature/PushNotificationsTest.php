@@ -2,6 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Modules\Bookings\Enums\BookingStatus;
+use App\Modules\Bookings\Models\Booking;
+use App\Modules\Bookings\Notifications\BookingRequested;
+use App\Modules\Bookings\Notifications\BookingStatusChanged;
 use App\Modules\Events\Models\Event;
 use App\Modules\Identity\Models\User;
 use App\Modules\Recommendations\Enums\RecommendationReason;
@@ -113,5 +117,43 @@ class PushNotificationsTest extends TestCase
         $this->assertSame($notification->body(), $push->body);
         $this->assertSame("/events/{$event->id}", $push->route);
         $this->assertContains('push', $notification->via($event->host));
+    }
+
+    /** An unsaved booking is enough: the push only reads its fields. */
+    private function booking(User $customer): Booking
+    {
+        return (new Booking)->forceFill([
+            'id' => '01JBOOKING0000000000000000',
+            'number' => 'PIJ-1042',
+            'vendor_id' => '01JVENDOR00000000000000000',
+            'customer_id' => $customer->id,
+            'event_id' => '01JEVENT000000000000000000',
+            'status' => BookingStatus::PendingVendor,
+        ]);
+    }
+
+    public function test_a_booking_request_push_opens_that_businesss_requests(): void
+    {
+        $customer = User::factory()->create(['display_name' => 'Kwame Boateng']);
+        $manager = User::factory()->create();
+
+        $push = (new BookingRequested($this->booking($customer)))->toPush($manager);
+
+        $this->assertSame('New booking request', $push->title);
+        $this->assertStringContainsString('PIJ-1042', $push->body);
+        $this->assertSame('/vendor/requests?vendor=01JVENDOR00000000000000000', $push->route);
+    }
+
+    public function test_booking_updates_open_the_event_for_customers_and_requests_for_vendors(): void
+    {
+        $customer = User::factory()->create();
+        $booking = $this->booking($customer)->forceFill(['status' => BookingStatus::Accepted]);
+        $notification = new BookingStatusChanged($booking);
+
+        $this->assertSame('/events/01JEVENT000000000000000000', $notification->toPush($customer)->route);
+        $this->assertSame(
+            '/vendor/requests?vendor=01JVENDOR00000000000000000',
+            $notification->toPush(User::factory()->create())->route,
+        );
     }
 }

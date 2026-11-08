@@ -21,8 +21,8 @@ class CheckoutController extends Controller
         $data = $request->validate([
             'event_id' => ['required', 'string', 'size:26'],
             'lines' => ['required', 'array', 'min:1', 'max:100'],
-            'lines.*.item_id' => ['required', 'string', 'size:24'],
-            'lines.*.variant_id' => ['required', 'string', 'size:24'],
+            'lines.*.item_id' => ['required', 'ulid'],
+            'lines.*.variant_id' => ['required', 'ulid'],
             'lines.*.qty' => ['required', 'integer', 'min:1', 'max:100000'],
             'fulfilment' => ['sometimes', 'array'],
             'fulfilment.*.type' => ['sometimes', Rule::in(['delivery', 'pickup'])],

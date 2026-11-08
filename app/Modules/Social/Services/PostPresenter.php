@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Turns posts into the feed card JSON in a fixed number of queries, whatever the page size:
- * authors, events, tags, item cards (one MongoDB query), my likes, follow state.
+ * authors, events, tags, item cards (one catalog query), my likes, follow state.
  */
 class PostPresenter
 {

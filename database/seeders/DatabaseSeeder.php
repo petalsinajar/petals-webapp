@@ -9,8 +9,7 @@ use Illuminate\Database\Seeder;
 
 /**
  * Demo data for local development.
- *   php artisan db:seed            SQL: admin, users, vendors, events
- *   php artisan db:seed --class=CatalogSeeder   MongoDB: categories and items
+ *   php artisan db:seed     admin, users, vendors, events, categories and demo items
  */
 class DatabaseSeeder extends Seeder
 {
@@ -47,5 +46,7 @@ class DatabaseSeeder extends Seeder
         Event::factory()->create(['host_id' => $host->id, 'type' => 'wedding', 'title' => 'Kofi & Esi’s Wedding']);
 
         User::factory(10)->create();
+
+        $this->call(CatalogSeeder::class);
     }
 }

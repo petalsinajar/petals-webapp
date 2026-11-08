@@ -67,6 +67,7 @@ Route::middleware(['auth:sanctum', 'abilities:access', 'active', 'throttle:api']
     Route::post('uploads', UploadController::class)->middleware('throttle:uploads');
 
     // Vendors
+    Route::get('vendors', [VendorController::class, 'index']);
     Route::post('vendors', [VendorController::class, 'store']);
     Route::get('vendors/{vendor}', [VendorController::class, 'show']);
     Route::patch('vendors/{vendor}', [VendorController::class, 'update'])->whereUlid('vendor');

@@ -42,8 +42,8 @@ class PostController extends Controller
             'tags.*.x' => ['required', 'numeric', 'between:0,1'],
             'tags.*.y' => ['required', 'numeric', 'between:0,1'],
             'tags.*.target_type' => ['required', Rule::in(['item', 'vendor', 'user'])],
-            'tags.*.target_id' => ['required', 'string', 'max:26'],
-            'tags.*.variant_id' => ['nullable', 'string', 'size:24'],
+            'tags.*.target_id' => ['required', 'ulid'],
+            'tags.*.variant_id' => ['nullable', 'ulid'],
         ]);
 
         $post = $posts->create($request->user(), $data);

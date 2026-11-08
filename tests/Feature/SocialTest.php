@@ -65,7 +65,7 @@ class SocialTest extends TestCase
 
         $this->signIn(User::factory()->create());
         $this->getJson("/v1/posts/{$post['id']}")
-            ->assertJsonPath('media.0.tags.0.target.item.title', $chairs->title);
+            ->assertJsonPath('media.0.tags.0.target.item.title', 'Chiavari chair'); // the item, not the variant
         $this->getJson("/v1/items/{$chairs->itemId}/posts")->assertJsonPath('data.0.id', $post['id']);
     }
 

@@ -29,7 +29,7 @@ use Illuminate\Support\Str;
  *
  * One run for one event sends at most one notification: the category with the fewest
  * suggestions so far, and its best few vendors. Everything is read through the catalog
- * and availability contracts, so this never touches MongoDB directly.
+ * and availability contracts, never the Catalog module's tables.
  */
 class RecommendationService
 {
@@ -145,9 +145,11 @@ class RecommendationService
             ->where('verification_status', 'verified')
             ->whereJsonContains('event_types', $event->type)
             ->whereNotIn('id', $excluded)
+            // With a known venue, only vendors whose own radius covers it. Without one, anyone qualifies.
+            ->when($event->venue_lat !== null && $event->venue_lng !== null,
+                fn ($q) => Geo::vendorsServing($q, (float) $event->venue_lat, (float) $event->venue_lng))
             ->get()
-            ->mapWithKeys(fn (Vendor $vendor) => [$vendor->id => [$vendor, $this->distanceKm($event, $vendor)]])
-            ->filter(fn (array $v) => $this->inServiceArea($event, $v[0], $v[1]));
+            ->mapWithKeys(fn (Vendor $vendor) => [$vendor->id => [$vendor, $this->distanceKm($event, $vendor)]]);
 
         if ($vendors->isEmpty()) {
             return [];
@@ -274,16 +276,6 @@ class RecommendationService
         }
 
         return Geo::distanceKm($vendor->base_lat, $vendor->base_lng, $event->venue_lat, $event->venue_lng);
-    }
-
-    /** With a known venue, the vendor must have a base and cover it. Without one, anyone qualifies. */
-    private function inServiceArea(Event $event, Vendor $vendor, ?float $km): bool
-    {
-        if ($event->venue_lat === null || $event->venue_lng === null) {
-            return true;
-        }
-
-        return $km !== null && $km <= $vendor->service_radius_km;
     }
 
     /**

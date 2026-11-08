@@ -6,11 +6,10 @@ use App\Modules\Bookings\Events\BookingCreated;
 use App\Modules\Bookings\Models\Booking;
 use App\Modules\Bookings\Policies\BookingPolicy;
 use App\Modules\Catalog\Availability\AvailabilityStore;
-use App\Modules\Catalog\Availability\InMemoryAvailabilityStore;
-use App\Modules\Catalog\Availability\MongoAvailabilityStore;
+use App\Modules\Catalog\Availability\SqlAvailabilityStore;
 use App\Modules\Catalog\Contracts\CatalogReader;
-use App\Modules\Catalog\Services\InMemoryCatalogReader;
-use App\Modules\Catalog\Services\MongoCatalogReader;
+use App\Modules\Catalog\Services\CapacityWarnings;
+use App\Modules\Catalog\Services\SqlCatalogReader;
 use App\Modules\Events\Models\Event;
 use App\Modules\Events\Policies\EventPolicy;
 use App\Modules\Identity\Contracts\SmsSender;
@@ -41,14 +40,11 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        // Inventory lives in MongoDB. The test suite swaps in the in-memory versions.
-        $this->app->singleton(AvailabilityStore::class, fn () => config('eventapp.inventory_driver') === 'memory'
-            ? new InMemoryAvailabilityStore
-            : new MongoAvailabilityStore('mongodb'));
-
-        $this->app->singleton(CatalogReader::class, fn () => config('eventapp.inventory_driver') === 'memory'
-            ? new InMemoryCatalogReader
-            : new MongoCatalogReader);
+        // Inventory lives in the main database, so stock and bookings share transactions.
+        $this->app->singleton(AvailabilityStore::class, fn () => new SqlAvailabilityStore);
+        $this->app->singleton(CatalogReader::class, fn () => new SqlCatalogReader);
+        // Per request/job: stock warnings from ItemVariant's hook, read by whoever saved it.
+        $this->app->scoped(CapacityWarnings::class);
 
         $this->app->singleton(PaymentGateway::class, fn () => match (config('eventapp.payments.gateway')) {
             'paystack' => new PaystackGateway,

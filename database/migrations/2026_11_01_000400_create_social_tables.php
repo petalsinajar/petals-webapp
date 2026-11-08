@@ -42,8 +42,8 @@ return new class extends Migration
             $table->decimal('x', 5, 4); // 0..1 from the left
             $table->decimal('y', 5, 4); // 0..1 from the top
             $table->string('target_type', 20); // item | vendor | user
-            $table->string('target_id', 26);   // Mongo ObjectId for items, ULID otherwise
-            $table->string('variant_id', 24)->nullable();
+            $table->ulid('target_id');         // items, vendors or users: polymorphic, so no foreign key
+            $table->foreignUlid('variant_id')->nullable()->constrained('item_variants')->nullOnDelete();
             $table->foreignUlid('vendor_id')->nullable()->constrained()->nullOnDelete(); // owner of a tagged item
             $table->string('status', 20)->default('approved'); // pending | approved | rejected
             $table->timestamps();
@@ -76,7 +76,7 @@ return new class extends Migration
             $table->foreignUlid('post_id')->constrained()->cascadeOnDelete();
             $table->ulidMorphs('author');
             $table->foreignUlid('posted_by')->constrained('users');
-            $table->foreignUlid('parent_id')->nullable()->constrained('comments')->cascadeOnDelete();
+            $table->ulid('parent_id')->nullable();
             $table->text('body');
             $table->unsignedInteger('likes_count')->default(0);
             $table->unsignedInteger('replies_count')->default(0);
@@ -84,6 +84,10 @@ return new class extends Migration
             $table->softDeletes();
 
             $table->index(['post_id', 'parent_id', 'created_at']);
+        });
+        // Separate step: PostgreSQL needs the primary key in place before a self-reference.
+        Schema::table('comments', function (Blueprint $table) {
+            $table->foreign('parent_id')->references('id')->on('comments')->cascadeOnDelete();
         });
 
         // Fan-out on write for the Following feed.

@@ -90,8 +90,8 @@ class PostService
                 'x' => $tag['x'],
                 'y' => $tag['y'],
                 'target_type' => $tag['target_type'],
-                'target_id' => $tag['target_id'],
-                'variant_id' => $tag['variant_id'] ?? null,
+                'target_id' => strtolower($tag['target_id']),
+                'variant_id' => isset($tag['variant_id']) ? strtolower($tag['variant_id']) : null,
                 'status' => 'approved',
             ];
 
@@ -100,6 +100,9 @@ class PostService
                     $vendorId = $this->catalog->vendorOf($tag['target_id'])
                         ?? throw ValidationException::withMessages(["tags.$i.target_id" => 'Item not found.']);
                     $row['vendor_id'] = $vendorId;
+                    if ($row['variant_id'] && $this->catalog->variant($tag['target_id'], $row['variant_id']) === null) {
+                        throw ValidationException::withMessages(["tags.$i.variant_id" => 'That item has no such variant.']);
+                    }
                     // Tagging another vendor's item needs that vendor's approval.
                     $isOwnItem = $author->type === Actor::VENDOR && $author->id === $vendorId;
                     $row['status'] = $isOwnItem ? 'approved' : 'pending';

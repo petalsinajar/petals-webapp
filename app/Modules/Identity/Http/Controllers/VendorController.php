@@ -8,6 +8,8 @@ use App\Modules\Identity\Http\Resources\VendorResource;
 use App\Modules\Identity\Models\Vendor;
 use App\Modules\Identity\Services\HandleRegistry;
 use App\Support\Actor;
+use App\Support\Geo;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -18,6 +20,39 @@ class VendorController extends Controller
     private const EVENT_TYPES = ['wedding', 'birthday', 'corporate', 'other'];
 
     public function __construct(private readonly HandleRegistry $handles) {}
+
+    /**
+     * GET /v1/vendors?lat=&lng=&category=&event_type= — vendors whose service area covers that
+     * venue, nearest first. One page of at most `limit`.
+     */
+    public function index(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'lat' => ['required', 'numeric', 'between:-90,90'],
+            'lng' => ['required', 'numeric', 'between:-180,180'],
+            'category' => ['nullable', 'string', 'max:40'],
+            'event_type' => ['nullable', Rule::in(self::EVENT_TYPES)],
+            'limit' => ['nullable', 'integer', 'between:1,50'],
+        ]);
+        [$lat, $lng] = [(float) $data['lat'], (float) $data['lng']];
+
+        $query = Vendor::query()
+            ->where('status', 'active')
+            ->when($data['category'] ?? null, fn ($q, $category) => $q->whereJsonContains('categories', $category))
+            ->when($data['event_type'] ?? null, fn ($q, $type) => $q->whereJsonContains('event_types', $type));
+        Geo::vendorsServing($query, $lat, $lng);
+        Geo::orderByDistance($query, $lat, $lng);
+
+        $vendors = $query->orderBy('id')->limit($data['limit'] ?? 20)->get();
+
+        return response()->json([
+            'data' => $vendors->map(fn (Vendor $vendor) => [
+                ...(new VendorResource($vendor))->resolve(),
+                'distance_km' => round(Geo::distanceKm($vendor->base_lat, $vendor->base_lng, $lat, $lng), 1),
+            ])->values(),
+            'next_cursor' => null,
+        ]);
+    }
 
     /** POST /v1/vendors — the signed-in user becomes the owner. */
     public function store(Request $request): VendorResource

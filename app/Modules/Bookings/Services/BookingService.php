@@ -3,7 +3,6 @@
 namespace App\Modules\Bookings\Services;
 
 use App\Modules\Bookings\Enums\BookingStatus;
-use App\Modules\Bookings\Jobs\ReleaseBookingStock;
 use App\Modules\Bookings\Models\Booking;
 use App\Modules\Bookings\Notifications\BookingStatusChanged;
 use App\Modules\Catalog\Availability\AvailabilityStore;
@@ -19,7 +18,8 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * The booking lifecycle. Every status change goes through transition(), which locks the
- * row, checks the move is allowed, and records it in booking_status_events.
+ * row, checks the move is allowed, records it in booking_status_events and releases stock
+ * when the booking stops holding it, all in one transaction.
  */
 class BookingService
 {
@@ -184,16 +184,17 @@ class BookingService
                 'created_at' => now(),
             ]);
 
+            // Stock goes back once the items are back (returned or disputed) or the booking ends
+            // early, in the same transaction as the status change. Completed bookings were
+            // already released; releasing is idempotent anyway.
+            if (! $to->holdsStock() && $to !== BookingStatus::Completed) {
+                $this->store->releaseForBooking($locked->id);
+            }
+
             return $locked;
         });
 
-        // Side effects run after commit. Stock goes back once the items are back (returned or
-        // disputed) or the booking ends early; completed bookings were already released.
-        if (! $to->holdsStock() && $to !== BookingStatus::Completed) {
-            ReleaseBookingStock::dispatch($updated->id);
-        }
-
-        // Tell the other side.
+        // Tell the other side, after commit.
         if ($actor?->id === $updated->customer_id) {
             Notification::send($updated->vendor->managers()->get(), new BookingStatusChanged($updated));
         } else {

@@ -16,12 +16,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Arr;
-use MongoDB\Laravel\Eloquent\HybridRelations;
 
 class Vendor extends Model implements HasName
 {
     /** @use HasFactory<VendorFactory> */
-    use HasFactory, HasUlids, HybridRelations, Notifiable, SoftDeletes;
+    use HasFactory, HasUlids, Notifiable, SoftDeletes;
 
     protected $fillable = [
         'handle', 'name', 'bio', 'logo_url', 'cover_url', 'event_types', 'categories',
@@ -29,7 +28,8 @@ class Vendor extends Model implements HasName
         'delivery', 'payout',
     ];
 
-    protected $hidden = ['payout'];
+    // base_location is the PostGIS copy of base_lat/base_lng (PostgreSQL only, generated).
+    protected $hidden = ['payout', 'base_location'];
 
     /** Database defaults, mirrored so new models have them before a refresh. */
     protected $attributes = [
@@ -80,15 +80,16 @@ class Vendor extends Model implements HasName
             ->withTimestamps();
     }
 
-    /** Inventory in MongoDB (cross-database relation via HybridRelations). */
+    /** @return HasMany<Item, $this> */
     public function items(): HasMany
     {
-        return $this->hasMany(Item::class, 'vendor_id');
+        return $this->hasMany(Item::class);
     }
 
+    /** @return HasMany<Package, $this> */
     public function packages(): HasMany
     {
-        return $this->hasMany(Package::class, 'vendor_id');
+        return $this->hasMany(Package::class);
     }
 
     /** @return HasMany<Booking, $this> */
