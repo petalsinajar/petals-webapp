@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnsureUserIsActive;
+use App\Http\Middleware\OptionalSanctumUser;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -26,6 +27,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'abilities' => CheckAbilities::class,
             'ability' => CheckForAnyAbility::class,
             'active' => EnsureUserIsActive::class,
+            'auth.optional' => OptionalSanctumUser::class,
         ]);
         // Behind a load balancer (ALB / Forge + Cloudflare), trust forwarded headers.
         $middleware->trustProxies(at: '*');

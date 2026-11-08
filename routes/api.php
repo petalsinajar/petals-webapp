@@ -40,6 +40,13 @@ if (app()->environment(['local', 'testing'])) {
     Route::post('dev/payments/{payment}/succeed', [PaymentWebhookController::class, 'devSucceed']);
 }
 
+// Browsable signed out; personalised (my_reaction, blocks) with an access token.
+Route::middleware(['auth.optional', 'throttle:api'])->group(function () {
+    Route::get('feed/discover', [FeedController::class, 'discover']);
+    Route::get('posts/{post}', [PostController::class, 'show']);
+    Route::get('posts/{post}/comments', [CommentController::class, 'index']);
+});
+
 // ---- Signed in -------------------------------------------------------------
 
 Route::middleware(['auth:sanctum', 'abilities:access', 'active', 'throttle:api'])->group(function () {
@@ -124,14 +131,11 @@ Route::middleware(['auth:sanctum', 'abilities:access', 'active', 'throttle:api']
 
     // Social
     Route::get('feed/following', [FeedController::class, 'following']);
-    Route::get('feed/discover', [FeedController::class, 'discover']);
     Route::post('posts', [PostController::class, 'store'])->middleware('throttle:posting');
-    Route::get('posts/{post}', [PostController::class, 'show']);
     Route::delete('posts/{post}', [PostController::class, 'destroy']);
     Route::put('posts/{post}/reaction', [PostController::class, 'react']);
     Route::delete('posts/{post}/reaction', [PostController::class, 'unreact']);
     Route::post('posts/{post}/shop-taps', [PostController::class, 'shopTap']);
-    Route::get('posts/{post}/comments', [CommentController::class, 'index']);
     Route::post('posts/{post}/comments', [CommentController::class, 'store'])->middleware('throttle:posting');
     Route::delete('comments/{comment}', [CommentController::class, 'destroy']);
 

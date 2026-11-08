@@ -19,6 +19,9 @@ class CommentController extends Controller
     /** GET /v1/posts/{post}/comments?parent_id= — top-level by default, or replies to one comment. */
     public function index(Request $request, Post $post): JsonResponse
     {
+        // Comments are as private as their post.
+        PostController::authorizeView($request, $post);
+
         $page = $post->comments()
             ->where('parent_id', $request->query('parent_id'))
             ->with('author')

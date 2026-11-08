@@ -51,15 +51,25 @@ class PostController extends Controller
         return response()->json($this->presenter->one($post, $request->user()), 201);
     }
 
-    /** GET /v1/posts/{post} */
+    /** GET /v1/posts/{post} — public route; the viewer may be anonymous. */
     public function show(Request $request, Post $post): JsonResponse
     {
-        abort_unless($post->status === 'published' || $post->posted_by === $request->user()->id, 404);
+        self::authorizeView($request, $post);
+
+        return response()->json($this->presenter->one($post, $request->user()));
+    }
+
+    /**
+     * Who may read a post (and its comments): anyone once it's published,
+     * except event-only posts, which stay with the event's members.
+     * Guests are denied by the event policy, so those answer 403.
+     */
+    public static function authorizeView(Request $request, Post $post): void
+    {
+        abort_unless($post->status === 'published' || $post->posted_by === $request->user()?->id, 404);
         if ($post->visibility === 'event_members' && $post->event) {
             Gate::authorize('view', $post->event);
         }
-
-        return response()->json($this->presenter->one($post, $request->user()));
     }
 
     /** DELETE /v1/posts/{post} */
