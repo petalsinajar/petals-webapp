@@ -4,12 +4,14 @@ namespace App\Modules\Social\Notifications;
 
 use App\Modules\Identity\Models\User;
 use App\Modules\Social\Models\Post;
+use App\Support\Push\HasPushMessage;
+use App\Support\Push\PushMessage;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 
 /** Grouped by post in the app: "Ama and 12 others liked your post". */
-class PostLiked extends Notification implements ShouldQueue
+class PostLiked extends Notification implements HasPushMessage, ShouldQueue
 {
     use Queueable;
 
@@ -18,7 +20,15 @@ class PostLiked extends Notification implements ShouldQueue
     /** @return list<string> */
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return ['database', 'push'];
+    }
+
+    public function toPush(object $notifiable): PushMessage
+    {
+        $name = $this->liker->display_name ?: '@'.$this->liker->handle;
+
+        // The app has no post screen yet, so the tap just opens it.
+        return new PushMessage('New like', "{$name} liked your post.", data: ['post_id' => $this->post->id]);
     }
 
     /** @return array<string, mixed> */

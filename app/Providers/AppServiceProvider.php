@@ -25,6 +25,7 @@ use App\Modules\Payments\Gateways\PaystackGateway;
 use App\Modules\Recommendations\Listeners\MarkRecommendationBooked;
 use App\Modules\Social\Models\Comment;
 use App\Modules\Social\Models\Post;
+use App\Support\Push\OneSignalChannel;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
@@ -32,6 +33,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Event as Events;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
@@ -81,6 +83,9 @@ class AppServiceProvider extends ServiceProvider
 
         // Cross-module reactions. Listeners are queued, so they never slow the request.
         Events::listen(BookingCreated::class, MarkRecommendationBooked::class);
+
+        // `push` in a notification's via(): the phone, through OneSignal.
+        Notification::extend('push', fn ($app) => $app->make(OneSignalChannel::class));
 
         RateLimiter::for('api', fn (Request $request) => Limit::perMinute(120)->by($request->user()?->id ?: $request->ip()));
         RateLimiter::for('uploads', fn (Request $request) => Limit::perMinute(20)->by($request->user()?->id ?: $request->ip()));

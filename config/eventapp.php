@@ -74,6 +74,17 @@ return [
         ],
     ],
 
+    // The `push` notification channel (app/Support/Push). Without a REST API
+    // key, push is skipped and notifications only reach the in-app list.
+    'push' => [
+        'onesignal' => [
+            'url' => env('ONESIGNAL_URL', 'https://api.onesignal.com/'),
+            'app_id' => env('ONESIGNAL_APP_ID', '0a3e6f60-5b02-4338-8a89-edc6177108b6'),
+            // Secret: OneSignal dashboard → Settings → Keys & IDs.
+            'rest_api_key' => env('ONESIGNAL_REST_API_KEY'),
+        ],
+    ],
+
     // Vendor suggestions for hosts' upcoming events (app/Modules/Recommendations).
     'recommendations' => [
         'enabled' => (bool) env('RECOMMENDATIONS_ENABLED', true),
@@ -114,8 +125,8 @@ return [
         // Score = weighted sum of components, each 0..1.
         'weights' => ['rating' => 0.25, 'experience' => 0.15, 'distance' => 0.2, 'price' => 0.15, 'fairness' => 0.25],
 
-        // Add 'fcm' (or your push channel) here when push ships; the payload already has title/body/deep_link.
-        'channels' => ['database'],
+        // In-app list, and the phone through OneSignal (see 'push' above).
+        'channels' => ['database', 'push'],
         'deep_link' => 'petalsinajar://events/{event}/suggestions',
         'category_labels' => [
             'chairs' => 'chair', 'tables' => 'table', 'tents' => 'tent', 'decor' => 'decor',

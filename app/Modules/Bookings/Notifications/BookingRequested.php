@@ -3,12 +3,14 @@
 namespace App\Modules\Bookings\Notifications;
 
 use App\Modules\Bookings\Models\Booking;
+use App\Support\Push\HasPushMessage;
+use App\Support\Push\PushMessage;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 
 /** Sent to a vendor's owners and managers. Add SMS here: a missed request is a lost sale. */
-class BookingRequested extends Notification implements ShouldQueue
+class BookingRequested extends Notification implements HasPushMessage, ShouldQueue
 {
     use Queueable;
 
@@ -17,7 +19,19 @@ class BookingRequested extends Notification implements ShouldQueue
     /** @return list<string> */
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return ['database', 'push'];
+    }
+
+    public function toPush(object $notifiable): PushMessage
+    {
+        $customer = $this->booking->customer?->display_name ?: 'A customer';
+
+        // Vendor screens aren't in the app yet, so the tap just opens it.
+        return new PushMessage(
+            'New booking request',
+            "{$customer} requested booking #{$this->booking->number}. Respond soon to keep it.",
+            data: ['booking_id' => $this->booking->id],
+        );
     }
 
     /** @return array<string, mixed> */

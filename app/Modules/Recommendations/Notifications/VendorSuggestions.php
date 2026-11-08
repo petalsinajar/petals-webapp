@@ -4,16 +4,18 @@ namespace App\Modules\Recommendations\Notifications;
 
 use App\Modules\Events\Models\Event;
 use App\Modules\Recommendations\Enums\RecommendationReason;
+use App\Support\Push\HasPushMessage;
+use App\Support\Push\PushMessage;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Str;
 
 /**
- * "3 sound vendors are free on 12 Dec" — one grouped notification per batch of suggestions.
- * The payload carries title, body and deep_link so a push channel can reuse it as-is.
+ * "3 sound vendors are free on 12 Dec" — one grouped notification per batch of suggestions,
+ * in the in-app list and as a push that opens the event.
  */
-class VendorSuggestions extends Notification implements ShouldQueue
+class VendorSuggestions extends Notification implements HasPushMessage, ShouldQueue
 {
     use Queueable;
 
@@ -52,6 +54,16 @@ class VendorSuggestions extends Notification implements ShouldQueue
             RecommendationReason::MissingCategory => "You haven’t booked {$label} for {$title} yet. These vendors are available.",
             RecommendationReason::LastCall => "Last call for {$title}: book {$label} soon, before these dates fill up.",
         };
+    }
+
+    public function toPush(object $notifiable): PushMessage
+    {
+        return new PushMessage(
+            $this->title(),
+            $this->body(),
+            route: "/events/{$this->event->id}",
+            data: ['event_id' => $this->event->id, 'category_id' => $this->category],
+        );
     }
 
     /** @return array<string, mixed> */
