@@ -64,6 +64,16 @@ class DiscoverTest extends TestCase
         $this->assertNotContains($first->json('data.0.id'), [$this->getJson('/v1/items?limit=2&cursor=o:2&lat='.self::LAT.'&lng='.self::LNG)->json('data.0.id')]);
     }
 
+    public function test_an_item_page_includes_its_vendor(): void
+    {
+        $vendor = $this->vendor();
+        $item = $this->variant($vendor);
+
+        $this->getJson("/v1/items/{$item->itemId}")->assertOk()
+            ->assertJsonPath('vendor.id', $vendor->id)
+            ->assertJsonPath('vendor.name', 'Royal Canopies');
+    }
+
     public function test_a_parent_category_finds_its_children(): void
     {
         Category::create(['id' => 'seating', 'name' => 'Seating']);

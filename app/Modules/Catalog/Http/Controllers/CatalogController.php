@@ -86,7 +86,7 @@ class CatalogController extends Controller
     /** GET /v1/items/{item} */
     public function show(string $item): ItemResource
     {
-        return new ItemResource($this->findItem($item)->load('variants'));
+        return new ItemResource($this->findItem($item)->load(['variants', 'vendor']));
     }
 
     /** GET /v1/items/{item}/availability?variant_id=&from=2026-12-01&to=2026-12-31 */
