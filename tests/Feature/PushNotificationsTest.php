@@ -144,13 +144,15 @@ class PushNotificationsTest extends TestCase
         $this->assertSame('/vendor/requests?vendor=01JVENDOR00000000000000000', $push->route);
     }
 
-    public function test_booking_updates_open_the_event_for_customers_and_requests_for_vendors(): void
+    public function test_booking_updates_open_the_booking_for_customers_and_requests_for_vendors(): void
     {
         $customer = User::factory()->create();
-        $booking = $this->booking($customer)->forceFill(['status' => BookingStatus::Accepted]);
+        $booking = $this->booking($customer)->forceFill(['status' => BookingStatus::Confirmed]);
         $notification = new BookingStatusChanged($booking);
 
-        $this->assertSame('/events/01JEVENT000000000000000000', $notification->toPush($customer)->route);
+        $push = $notification->toPush($customer);
+        $this->assertSame('/bookings/01JBOOKING0000000000000000', $push->route);
+        $this->assertStringContainsString('accepted your booking', $push->body);
         $this->assertSame(
             '/vendor/requests?vendor=01JVENDOR00000000000000000',
             $notification->toPush(User::factory()->create())->route,

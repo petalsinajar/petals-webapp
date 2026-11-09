@@ -27,6 +27,7 @@
         <env name="DB_DATABASE" value=":memory:"/>
         <env name="DB_URL" value=""/>
         <env name="PAYMENT_GATEWAY" value="fake"/>
+        <env name="IN_APP_PAYMENTS" value="true"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

@@ -49,6 +49,10 @@ return [
     ],
 
     'payments' => [
+        // Off for launch: customer and vendor settle payment between themselves. Bookings
+        // are requests the vendor accepts (→ confirmed) or declines; nothing is charged.
+        'in_app' => (bool) env('IN_APP_PAYMENTS', false),
+
         // fake | paystack
         'gateway' => env('PAYMENT_GATEWAY', 'fake'),
         'paystack' => [

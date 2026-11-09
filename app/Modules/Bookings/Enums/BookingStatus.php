@@ -20,7 +20,8 @@ enum BookingStatus: string
     public function canMoveTo(self $to): bool
     {
         return in_array($to, match ($this) {
-            self::PendingVendor => [self::Accepted, self::Declined, self::Expired, self::Cancelled],
+            // Straight to confirmed when payment happens outside the app.
+            self::PendingVendor => [self::Accepted, self::Confirmed, self::Declined, self::Expired, self::Cancelled],
             self::Accepted => [self::Confirmed, self::Expired, self::Cancelled],
             self::Confirmed => [self::OutForDelivery, self::Delivered, self::Cancelled],
             self::OutForDelivery => [self::Delivered],

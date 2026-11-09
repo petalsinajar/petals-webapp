@@ -152,7 +152,10 @@ class CheckoutService
             throw ValidationException::withMessages(["fulfilment.{$vendor->id}.deliver_at" => "{$vendor->name} needs at least {$leadHours} hours' notice."]);
         }
 
-        $instant = collect($lines)->every(fn ($l) => $l['snapshot']->instantBook);
+        // Without in-app payment there's no deposit to secure an instant booking, so every
+        // booking is a request the vendor answers.
+        $instant = config('eventapp.payments.in_app')
+            && collect($lines)->every(fn ($l) => $l['snapshot']->instantBook);
         $status = $instant ? BookingStatus::Accepted : BookingStatus::PendingVendor;
         $holdUntil = $instant
             ? now()->addMinutes(config('eventapp.bookings.hold_minutes'))->toImmutable()

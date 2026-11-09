@@ -35,6 +35,10 @@ class BookingService
     {
         $this->authorizeVendor($actor, $booking, manage: true);
 
+        if (! config('eventapp.payments.in_app')) {
+            return $this->confirmWithoutPayment($booking, $actor);
+        }
+
         $payBy = now()->addHours(config('eventapp.bookings.deposit_window_hours'))->toImmutable();
 
         $booking = $this->transition($booking, BookingStatus::Accepted, $actor, null, function (Booking $b) use ($payBy) {
@@ -45,6 +49,25 @@ class BookingService
         foreach ($booking->lines as $line) {
             if ($line->reservation_id) {
                 $this->store->extendHold($line->reservation_id, $payBy);
+            }
+        }
+
+        return $booking;
+    }
+
+    /**
+     * Payment is arranged outside the app: accepting confirms the booking and turns its
+     * stock holds into firm reservations, so they never expire.
+     */
+    private function confirmWithoutPayment(Booking $booking, User $actor): Booking
+    {
+        $booking = $this->transition($booking, BookingStatus::Confirmed, $actor, 'Accepted by the vendor', function (Booking $b) {
+            $b->pay_by = null;
+        });
+
+        foreach ($booking->lines as $line) {
+            if ($line->reservation_id) {
+                $this->store->confirm($line->reservation_id);
             }
         }
 
