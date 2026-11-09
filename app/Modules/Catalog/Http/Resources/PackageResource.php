@@ -4,6 +4,7 @@ namespace App\Modules\Catalog\Http\Resources;
 
 use App\Modules\Catalog\Models\Package;
 use App\Modules\Catalog\Models\PackageLine;
+use App\Modules\Identity\Http\Resources\VendorSummary;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -15,6 +16,7 @@ class PackageResource extends JsonResource
         return [
             'id' => $this->id,
             'vendor_id' => $this->vendor_id,
+            'vendor' => $this->whenLoaded('vendor', fn () => VendorSummary::of($this->vendor)),
             'title' => $this->title,
             'description' => $this->description,
             'event_types' => $this->event_types ?? [],

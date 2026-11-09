@@ -3,18 +3,26 @@
 namespace App\Modules\Recommendations\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Catalog\Models\Category;
 use App\Modules\Events\Models\Event;
+use App\Modules\Identity\Http\Resources\VendorSummary;
 use App\Modules\Identity\Models\Vendor;
+use App\Modules\Recommendations\Data\VendorMatch;
 use App\Modules\Recommendations\Enums\RecommendationStatus;
 use App\Modules\Recommendations\Http\Resources\SuggestionResource;
 use App\Modules\Recommendations\Models\Recommendation;
+use App\Modules\Recommendations\Services\RecommendationService;
 use App\Support\Paginated;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 
 class SuggestionController extends Controller
 {
+    private const VENDORS_PER_NEED = 3;
+
     /** GET /v1/events/{event}/suggestions — vendors suggested to the host, newest first. */
     public function index(Request $request, Event $event): JsonResponse
     {
@@ -27,6 +35,35 @@ class SuggestionController extends Controller
             ->cursorPaginate(30);
 
         return Paginated::response($suggestions, SuggestionResource::class);
+    }
+
+    /**
+     * GET /v1/events/{event}/needs — categories the event still needs, each with the best few
+     * vendors free on its dates. Live (not limited to what was sent), for the Discover tab.
+     */
+    public function needs(Event $event, RecommendationService $recommendations): JsonResponse
+    {
+        Gate::authorize('manage', $event);
+
+        $missing = $event->starts_at->isFuture() ? $recommendations->missingCategories($event) : [];
+        $names = Category::whereIn('id', $missing)->pluck('name', 'id');
+        $now = CarbonImmutable::now();
+
+        return response()->json([
+            'event_id' => $event->id,
+            'data' => collect($missing)->map(fn (string $category) => [
+                'category_id' => $category,
+                'category_name' => $names[$category] ?? Str::headline($category),
+                'vendors' => collect($recommendations->matches($event, $category, $now, includeSuggested: true))
+                    ->take(self::VENDORS_PER_NEED)
+                    ->map(fn (VendorMatch $match) => [
+                        'vendor' => VendorSummary::of($match->vendor),
+                        'from_price_minor' => $match->fromPriceMinor,
+                        'currency' => $match->currency,
+                        'distance_km' => $match->distanceKm === null ? null : round($match->distanceKm, 1),
+                    ])->values(),
+            ])->values(),
+        ]);
     }
 
     /** POST /v1/suggestions/{recommendation}/open */

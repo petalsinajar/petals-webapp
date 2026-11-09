@@ -4,6 +4,7 @@ namespace App\Modules\Catalog\Http\Resources;
 
 use App\Modules\Catalog\Models\Item;
 use App\Modules\Catalog\Models\ItemVariant;
+use App\Modules\Identity\Http\Resources\VendorSummary;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -22,6 +23,9 @@ class ItemResource extends JsonResource
             'specs' => $this->specs ?: (object) [],
             'event_types' => $this->event_types ?? [],
             'tags' => $this->tags ?? [],
+            'vendor' => $this->whenLoaded('vendor', fn () => VendorSummary::of($this->vendor)),
+            // The lowest unit price, for "from GH₵12 / event".
+            'from_price_minor' => $this->unitPriceFor(PHP_INT_MAX),
             'pricing' => [
                 'unit' => $this->pricing_unit,
                 'currency' => $this->currency(),

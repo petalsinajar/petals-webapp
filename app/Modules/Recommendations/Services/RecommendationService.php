@@ -129,14 +129,16 @@ class RecommendationService
     }
 
     /**
-     * Vendors who can supply a category for this event, best first. Excludes vendors already
-     * suggested (or dismissed) for the event and vendors the host has already booked.
+     * Vendors who can supply a category for this event, best first. Excludes vendors the host
+     * has already booked and, unless $includeSuggested, vendors already suggested (or dismissed).
      *
      * @return list<VendorMatch>
      */
-    public function matches(Event $event, string $category, CarbonImmutable $now): array
+    public function matches(Event $event, string $category, CarbonImmutable $now, bool $includeSuggested = false): array
     {
-        $excluded = Recommendation::where('event_id', $event->id)->pluck('vendor_id')
+        $suggested = Recommendation::where('event_id', $event->id)
+            ->when($includeSuggested, fn ($q) => $q->where('status', RecommendationStatus::Dismissed->value));
+        $excluded = $suggested->pluck('vendor_id')
             ->merge(Booking::where('event_id', $event->id)->whereNotIn('status', self::LAPSED)->pluck('vendor_id'))
             ->unique()->all();
 

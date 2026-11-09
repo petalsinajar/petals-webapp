@@ -3,8 +3,10 @@
 namespace App\Modules\Identity\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Catalog\Models\Category;
 use App\Modules\Identity\Enums\VendorRole;
 use App\Modules\Identity\Http\Resources\VendorResource;
+use App\Modules\Identity\Models\User;
 use App\Modules\Identity\Models\Vendor;
 use App\Modules\Identity\Services\HandleRegistry;
 use App\Support\Actor;
@@ -22,36 +24,74 @@ class VendorController extends Controller
     public function __construct(private readonly HandleRegistry $handles) {}
 
     /**
-     * GET /v1/vendors?lat=&lng=&category=&event_type= — vendors whose service area covers that
-     * venue, nearest first. One page of at most `limit`.
+     * GET /v1/vendors?lat=&lng=&category=&event_type=&q= — with lat/lng, vendors whose service
+     * area covers that venue, nearest first; with only q, a name search, most followed first.
+     * A category includes its children. One page of at most `limit`.
      */
     public function index(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'lat' => ['required', 'numeric', 'between:-90,90'],
-            'lng' => ['required', 'numeric', 'between:-180,180'],
+            'lat' => ['required_without:q', 'required_with:lng', 'nullable', 'numeric', 'between:-90,90'],
+            'lng' => ['required_without:q', 'required_with:lat', 'nullable', 'numeric', 'between:-180,180'],
+            'q' => ['nullable', 'string', 'max:80'],
             'category' => ['nullable', 'string', 'max:40'],
             'event_type' => ['nullable', Rule::in(self::EVENT_TYPES)],
             'limit' => ['nullable', 'integer', 'between:1,50'],
         ]);
-        [$lat, $lng] = [(float) $data['lat'], (float) $data['lng']];
+        $near = isset($data['lat'], $data['lng']) ? [(float) $data['lat'], (float) $data['lng']] : null;
 
         $query = Vendor::query()
             ->where('status', 'active')
-            ->when($data['category'] ?? null, fn ($q, $category) => $q->whereJsonContains('categories', $category))
-            ->when($data['event_type'] ?? null, fn ($q, $type) => $q->whereJsonContains('event_types', $type));
-        Geo::vendorsServing($query, $lat, $lng);
-        Geo::orderByDistance($query, $lat, $lng);
+            ->when($data['category'] ?? null, fn ($q, $category) => $q->where(function ($any) use ($category) {
+                foreach (Category::andChildren($category) as $id) {
+                    $any->orWhereJsonContains('categories', $id);
+                }
+            }))
+            ->when($data['event_type'] ?? null, fn ($q, $type) => $q->whereJsonContains('event_types', $type))
+            ->when($data['q'] ?? null, function ($q, $term) {
+                $like = '%'.$term.'%';
+                $op = DB::getDriverName() === 'pgsql' ? 'ilike' : 'like';
+                $q->where(fn ($w) => $w->where('name', $op, $like)->orWhere('handle', $op, $like));
+            });
+
+        if ($near) {
+            Geo::vendorsServing($query, ...$near);
+            Geo::orderByDistance($query, ...$near);
+        } else {
+            $query->orderByDesc('followers_count');
+        }
 
         $vendors = $query->orderBy('id')->limit($data['limit'] ?? 20)->get();
+        $following = $this->followedAmong($request->user(), $vendors->pluck('id')->all());
 
         return response()->json([
             'data' => $vendors->map(fn (Vendor $vendor) => [
                 ...(new VendorResource($vendor))->resolve(),
-                'distance_km' => round(Geo::distanceKm($vendor->base_lat, $vendor->base_lng, $lat, $lng), 1),
+                'distance_km' => $near && $vendor->base_lat !== null && $vendor->base_lng !== null
+                    ? round(Geo::distanceKm($vendor->base_lat, $vendor->base_lng, ...$near), 1)
+                    : null,
+                'is_following' => in_array($vendor->id, $following, true),
             ])->values(),
             'next_cursor' => null,
         ]);
+    }
+
+    /**
+     * Which of these vendors the viewer follows.
+     *
+     * @param  list<string>  $vendorIds
+     * @return list<string>
+     */
+    private function followedAmong(?User $viewer, array $vendorIds): array
+    {
+        if (! $viewer || $vendorIds === []) {
+            return [];
+        }
+
+        return DB::table('follows')
+            ->where(['follower_type' => Actor::USER, 'follower_id' => $viewer->id, 'target_type' => Actor::VENDOR])
+            ->whereIn('target_id', $vendorIds)
+            ->pluck('target_id')->all();
     }
 
     /** POST /v1/vendors — the signed-in user becomes the owner. */
@@ -76,16 +116,14 @@ class VendorController extends Controller
         return new VendorResource($vendor->setAttribute('my_role', 'owner'));
     }
 
-    /** GET /v1/vendors/{vendor} — by id or handle. */
+    /** GET /v1/vendors/{vendor} — by id or handle. Works signed out. */
     public function show(Request $request, string $vendor): VendorResource
     {
         $model = Vendor::where('id', $vendor)->orWhere('handle', HandleRegistry::normalize($vendor))->firstOrFail();
         $me = $request->user();
 
-        $model->setAttribute('is_following', DB::table('follows')
-            ->where(['follower_type' => Actor::USER, 'follower_id' => $me->id, 'target_type' => Actor::VENDOR, 'target_id' => $model->id])
-            ->exists());
-        $model->setAttribute('my_role', $me->roleIn($model)?->value);
+        $model->setAttribute('is_following', $this->followedAmong($me, [$model->id]) !== []);
+        $model->setAttribute('my_role', $me?->roleIn($model)?->value);
 
         return new VendorResource($model);
     }

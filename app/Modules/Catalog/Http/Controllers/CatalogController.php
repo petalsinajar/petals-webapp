@@ -40,8 +40,8 @@ class CatalogController extends Controller
     /**
      * GET /v1/items?category=&event_type=&vendor_id=&q=&lat=&lng=&cursor=
      *
-     * With lat/lng: only items from vendors whose service area covers that point, nearest
-     * vendor first, as one page.
+     * A category includes its children. With lat/lng: only items from vendors whose service
+     * area covers that point, nearest vendor first; the cursor is then an offset ("o:40").
      */
     public function index(Request $request): JsonResponse
     {
@@ -56,9 +56,9 @@ class CatalogController extends Controller
         ]);
         $limit = $data['limit'] ?? 20;
 
-        $query = Item::query()->select('items.*')->with('variants')
+        $query = Item::query()->select('items.*')->with(['variants', 'vendor'])
             ->where('items.status', 'active')
-            ->when($data['category'] ?? null, fn ($q, $category) => $q->where('items.category_id', $category))
+            ->when($data['category'] ?? null, fn ($q, $category) => $q->whereIn('items.category_id', Category::andChildren($category)))
             ->when($data['event_type'] ?? null, fn ($q, $type) => $q->whereJsonContains('items.event_types', $type))
             ->when($data['vendor_id'] ?? null, fn ($q, $vendor) => $q->where('items.vendor_id', strtolower($vendor)))
             ->when($data['q'] ?? null, function ($q, $term) {
@@ -72,7 +72,12 @@ class CatalogController extends Controller
             Geo::vendorsServing($query, (float) $data['lat'], (float) $data['lng']);
             Geo::orderByDistance($query, (float) $data['lat'], (float) $data['lng']);
 
-            return Paginated::manual($query->orderByDesc('items.id')->limit($limit)->get(), null, ItemResource::class);
+            $offset = preg_match('/^o:(\d{1,5})$/', (string) $request->query('cursor'), $m) ? (int) $m[1] : 0;
+            // One extra row tells us whether there's another page.
+            $rows = $query->orderByDesc('items.id')->offset($offset)->limit($limit + 1)->get();
+            $next = $rows->count() > $limit ? 'o:'.($offset + $limit) : null;
+
+            return Paginated::manual($rows->take($limit), $next, ItemResource::class);
         }
 
         return Paginated::response($query->orderByDesc('items.id')->cursorPaginate($limit), ItemResource::class);
@@ -120,9 +125,34 @@ class CatalogController extends Controller
         return response()->json(['data' => PackageResource::collection($packages)->resolve()]);
     }
 
+    /**
+     * GET /v1/packages?lat=&lng=&event_type= — packages from vendors serving that point,
+     * nearest vendor first. One page of at most `limit`.
+     */
+    public function packages(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'lat' => ['required', 'numeric', 'between:-90,90'],
+            'lng' => ['required', 'numeric', 'between:-180,180'],
+            'event_type' => ['nullable', Rule::in(['wedding', 'birthday', 'corporate', 'other'])],
+            'limit' => ['nullable', 'integer', 'between:1,50'],
+        ]);
+
+        $query = Package::query()->select('packages.*')->with(['lines', 'vendor'])
+            ->join('vendors', 'vendors.id', '=', 'packages.vendor_id')
+            ->where('packages.status', 'active')->where('vendors.status', 'active')
+            ->when($data['event_type'] ?? null, fn ($q, $type) => $q->whereJsonContains('packages.event_types', $type));
+        Geo::vendorsServing($query, (float) $data['lat'], (float) $data['lng']);
+        Geo::orderByDistance($query, (float) $data['lat'], (float) $data['lng']);
+
+        $packages = $query->orderBy('packages.price_minor')->limit($data['limit'] ?? 20)->get();
+
+        return Paginated::manual($packages, null, PackageResource::class);
+    }
+
     public function package(string $package): PackageResource
     {
-        $model = Str::isUlid($package) ? Package::with('lines')->find(strtolower($package)) : null;
+        $model = Str::isUlid($package) ? Package::with(['lines', 'vendor'])->find(strtolower($package)) : null;
         abort_if(! $model || $model->status !== 'active', 404);
 
         return new PackageResource($model);

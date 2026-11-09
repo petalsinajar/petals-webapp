@@ -28,6 +28,16 @@ class Category extends Model
         ];
     }
 
+    /**
+     * A category and its children, so browsing "Seating" also finds chairs and tables.
+     *
+     * @return list<string>
+     */
+    public static function andChildren(string $id): array
+    {
+        return [$id, ...static::where('parent_id', $id)->pluck('id')->all()];
+    }
+
     /** @return BelongsTo<Category, $this> */
     public function parent(): BelongsTo
     {

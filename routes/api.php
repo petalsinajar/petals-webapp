@@ -45,6 +45,16 @@ Route::middleware(['auth.optional', 'throttle:api'])->group(function () {
     Route::get('feed/discover', [FeedController::class, 'discover']);
     Route::get('posts/{post}', [PostController::class, 'show']);
     Route::get('posts/{post}/comments', [CommentController::class, 'index']);
+
+    // Catalog and vendor browsing (Discover); follow state when signed in.
+    Route::get('categories', [CatalogController::class, 'categories']);
+    Route::get('items', [CatalogController::class, 'index']);
+    Route::get('items/{item}', [CatalogController::class, 'show']);
+    Route::get('packages', [CatalogController::class, 'packages']);
+    Route::get('packages/{package}', [CatalogController::class, 'package']);
+    Route::get('vendors', [VendorController::class, 'index']);
+    Route::get('vendors/{vendor}/packages', [CatalogController::class, 'vendorPackages']);
+    Route::get('vendors/{vendor}', [VendorController::class, 'show']);
 });
 
 // ---- Signed in -------------------------------------------------------------
@@ -67,12 +77,9 @@ Route::middleware(['auth:sanctum', 'abilities:access', 'active', 'throttle:api']
     Route::post('uploads', UploadController::class)->middleware('throttle:uploads');
 
     // Vendors
-    Route::get('vendors', [VendorController::class, 'index']);
     Route::post('vendors', [VendorController::class, 'store']);
-    Route::get('vendors/{vendor}', [VendorController::class, 'show']);
     Route::patch('vendors/{vendor}', [VendorController::class, 'update'])->whereUlid('vendor');
     Route::get('vendors/{vendor}/posts', [FeedController::class, 'vendorPosts'])->whereUlid('vendor');
-    Route::get('vendors/{vendor}/packages', [CatalogController::class, 'vendorPackages']);
 
     Route::prefix('vendors/{vendor}')->whereUlid('vendor')->group(function () {
         Route::get('members', [VendorMemberController::class, 'index']);
@@ -95,14 +102,11 @@ Route::middleware(['auth:sanctum', 'abilities:access', 'active', 'throttle:api']
     });
 
     // Catalog
-    Route::get('categories', [CatalogController::class, 'categories']);
-    Route::get('items', [CatalogController::class, 'index']);
-    Route::get('items/{item}', [CatalogController::class, 'show']);
     Route::get('items/{item}/availability', [CatalogController::class, 'availability']);
     Route::get('items/{item}/posts', [FeedController::class, 'itemPosts']);
-    Route::get('packages/{package}', [CatalogController::class, 'package']);
 
     // Events
+    Route::get('events', [EventController::class, 'search']);
     Route::post('events', [EventController::class, 'store']);
     Route::get('events/{event}', [EventController::class, 'show']);
     Route::patch('events/{event}', [EventController::class, 'update']);
@@ -114,6 +118,7 @@ Route::middleware(['auth:sanctum', 'abilities:access', 'active', 'throttle:api']
 
     // Vendor suggestions for hosts
     Route::get('events/{event}/suggestions', [SuggestionController::class, 'index']);
+    Route::get('events/{event}/needs', [SuggestionController::class, 'needs']);
     Route::post('suggestions/{recommendation}/open', [SuggestionController::class, 'open'])->whereUlid('recommendation');
     Route::post('suggestions/{recommendation}/dismiss', [SuggestionController::class, 'dismiss'])->whereUlid('recommendation');
 

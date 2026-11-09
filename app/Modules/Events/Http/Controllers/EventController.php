@@ -42,6 +42,29 @@ class EventController extends Controller
         return new EventResource($event->load('host'));
     }
 
+    /**
+     * GET /v1/events?q= — upcoming events by title: public ones, and any the viewer belongs to.
+     * Soonest first, one page.
+     */
+    public function search(Request $request): JsonResponse
+    {
+        $data = $request->validate(['q' => ['required', 'string', 'min:2', 'max:80']]);
+        $like = '%'.$data['q'].'%';
+        $op = DB::getDriverName() === 'pgsql' ? 'ilike' : 'like';
+        $mine = EventMember::query()->where('user_id', $request->user()->id);
+
+        $events = Event::query()
+            ->where('title', $op, $like)
+            ->where('ends_at', '>=', now())
+            ->where(fn ($q) => $q->where('visibility', 'public')->orWhereIn('id', $mine->clone()->select('event_id')))
+            ->addSelect(['events.*', 'my_rsvp' => $mine->clone()->select('rsvp')->whereColumn('event_id', 'events.id')->limit(1)])
+            ->with('host')
+            ->orderBy('starts_at')->orderBy('id')
+            ->limit(20)->get();
+
+        return Paginated::manual($events, null, EventResource::class);
+    }
+
     /** GET /v1/events/{event} */
     public function show(Request $request, Event $event): EventResource
     {
