@@ -13,6 +13,7 @@ use App\Modules\Recommendations\Notifications\VendorSuggestions;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -21,6 +22,11 @@ class PushNotificationsTest extends TestCase
 {
     use RefreshDatabase;
 
+    /** OneSignal's reply to the next push; tests change it. */
+    private array $reply = ['id' => 'n1'];
+
+    private int $replyStatus = 200;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -28,7 +34,7 @@ class PushNotificationsTest extends TestCase
             'eventapp.push.onesignal.app_id' => 'app-123',
             'eventapp.push.onesignal.rest_api_key' => 'rest-key',
         ]);
-        Http::fake(['api.onesignal.com/*' => Http::response(['id' => 'n1'])]);
+        Http::fake(['api.onesignal.com/*' => fn () => Http::response($this->reply, $this->replyStatus)]);
     }
 
     /** $author posts; $liker likes it, which notifies $author. */
@@ -72,25 +78,60 @@ class PushNotificationsTest extends TestCase
         $this->assertSame(1, $author->notifications()->count());
     }
 
-    public function test_without_a_rest_api_key_push_is_skipped_quietly(): void
+    public function test_without_a_rest_api_key_push_is_skipped_and_logged(): void
     {
         config(['eventapp.push.onesignal.rest_api_key' => null]);
+        Log::spy();
         $author = User::factory()->create();
 
         $this->like($author, User::factory()->create());
 
         Http::assertNothingSent();
+        Log::shouldHaveReceived('warning')->withArgs(fn ($m) => str_contains($m, 'ONESIGNAL_REST_API_KEY'));
         $this->assertSame(1, $author->notifications()->count());
     }
 
     public function test_a_onesignal_error_never_breaks_the_in_app_notification(): void
     {
-        Http::fake(['api.onesignal.com/*' => Http::response(['errors' => ['App not found']], 400)]);
+        [$this->reply, $this->replyStatus] = [['errors' => ['App not found']], 400];
+        Log::spy();
         $author = User::factory()->create();
 
         $this->like($author, User::factory()->create());
 
         $this->assertSame(1, $author->notifications()->count());
+        Log::shouldHaveReceived('warning')->withArgs(fn ($m) => $m === 'OneSignal rejected push');
+    }
+
+    public function test_a_push_that_reaches_no_device_is_logged(): void
+    {
+        // What OneSignal says when nobody is signed in on a phone as that user.
+        $this->reply = ['id' => '', 'errors' => ['invalid_aliases' => ['external_id' => ['x']]]];
+        Log::spy();
+        $author = User::factory()->create();
+
+        $this->like($author, User::factory()->create());
+
+        Log::shouldHaveReceived('warning')->withArgs(fn ($m, $context = []) => $m === 'Push reached no device' && $context['user'] === $author->id);
+    }
+
+    public function test_push_test_command_explains_what_happened(): void
+    {
+        $user = User::factory()->create(['handle' => 'ama']);
+
+        $this->artisan('push:test', ['user' => '@ama'])
+            ->expectsOutputToContain('Sent (OneSignal id n1)')
+            ->assertSuccessful();
+
+        $this->reply = ['id' => '', 'errors' => ['invalid_aliases' => ['external_id' => [$user->id]]]];
+        $this->artisan('push:test', ['user' => $user->id])
+            ->expectsOutputToContain('no phone is linked to this user')
+            ->assertFailed();
+
+        config(['eventapp.push.onesignal.rest_api_key' => null]);
+        $this->artisan('push:test', ['user' => $user->id])
+            ->expectsOutputToContain('ONESIGNAL_REST_API_KEY is not set')
+            ->assertFailed();
     }
 
     public function test_a_new_follower_is_pushed(): void
