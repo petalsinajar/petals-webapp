@@ -9,6 +9,8 @@ use App\Modules\Identity\Http\Resources\VendorResource;
 use App\Modules\Identity\Models\User;
 use App\Modules\Identity\Models\Vendor;
 use App\Modules\Identity\Services\HandleRegistry;
+use App\Modules\Media\Models\Media;
+use App\Modules\Media\Services\MediaLibrary;
 use App\Support\Actor;
 use App\Support\Geo;
 use Illuminate\Http\JsonResponse;
@@ -21,7 +23,10 @@ class VendorController extends Controller
 {
     private const EVENT_TYPES = ['wedding', 'birthday', 'corporate', 'other'];
 
-    public function __construct(private readonly HandleRegistry $handles) {}
+    public function __construct(
+        private readonly HandleRegistry $handles,
+        private readonly MediaLibrary $media,
+    ) {}
 
     /**
      * GET /v1/vendors?lat=&lng=&category=&event_type=&q= — with lat/lng, vendors whose service
@@ -103,10 +108,14 @@ class VendorController extends Controller
             'name' => ['required', 'string', 'max:120'],
         ]);
 
-        $vendor = DB::transaction(function () use ($data, $request) {
-            $vendor = new Vendor(collect($data)->except('handle')->all());
+        $images = $this->images($data, $request, null);
+
+        $vendor = DB::transaction(function () use ($data, $request, $images) {
+            $vendor = new Vendor(collect($data)->except(['handle', ...array_keys($images)])->all());
             $vendor->handle = HandleRegistry::normalize($data['handle']);
+            $vendor->forceFill(array_map(fn ($m) => $m?->id, $images));
             $vendor->save();
+            $this->media->attach(array_values($images), $vendor);
             $this->handles->claim($vendor->handle, $vendor);
             $vendor->members()->create(['user_id' => $request->user()->id, 'role' => VendorRole::Owner, 'status' => 'active']);
 
@@ -145,9 +154,37 @@ class VendorController extends Controller
             unset($data['handle']);
         }
 
-        $vendor->fill($data)->save();
+        $images = $this->images($data, $request, $vendor);
+
+        DB::transaction(function () use ($vendor, $data, $images) {
+            $vendor->fill(collect($data)->except(array_keys($images))->all());
+            $vendor->forceFill(array_map(fn ($m) => $m?->id, $images))->save();
+            if ($images !== []) {
+                $this->media->attach(array_values($images), $vendor);
+                $this->media->releaseExcept($vendor, [$vendor->logo_media_id, $vendor->cover_media_id]);
+                $vendor->unsetRelation('logo')->unsetRelation('cover');
+            }
+        });
 
         return new VendorResource($vendor->setAttribute('my_role', $request->user()->roleIn($vendor)?->value));
+    }
+
+    /**
+     * Logo and cover media ids from the request, checked: the caller's own uploads, or ones
+     * uploaded for this vendor by its team.
+     *
+     * @return array<string, Media|null> column => media (null clears it)
+     */
+    private function images(array $data, Request $request, ?Vendor $vendor): array
+    {
+        $images = [];
+        foreach (['logo_media_id', 'cover_media_id'] as $column) {
+            if (array_key_exists($column, $data)) {
+                $images[$column] = $this->media->resolveOne($data[$column], $request->user(), $vendor, $column, for: $vendor);
+            }
+        }
+
+        return $images;
     }
 
     /** @return array<string, mixed> */
@@ -159,8 +196,9 @@ class VendorController extends Controller
             'handle' => [...$sometimes, 'string', 'max:30'],
             'name' => [...$sometimes, 'string', 'max:120'],
             'bio' => [...$sometimes, 'nullable', 'string', 'max:1000'],
-            'logo_url' => [...$sometimes, 'nullable', 'url', 'max:500'],
-            'cover_url' => [...$sometimes, 'nullable', 'url', 'max:500'],
+            // Ready images from POST /v1/uploads (purpose avatar / cover).
+            'logo_media_id' => [...$sometimes, 'nullable', 'ulid'],
+            'cover_media_id' => [...$sometimes, 'nullable', 'ulid'],
             'event_types' => [...$sometimes, 'array'],
             'event_types.*' => [Rule::in(self::EVENT_TYPES)],
             'categories' => [...$sometimes, 'array'],

@@ -32,7 +32,7 @@ class PushNotificationsTest extends TestCase
         parent::setUp();
         config([
             'eventapp.push.onesignal.app_id' => 'app-123',
-            'eventapp.push.onesignal.rest_api_key' => 'rest-key',
+            'eventapp.push.onesignal.rest_api_key' => 'os_v2_app_rest-key',
         ]);
         Http::fake(['api.onesignal.com/*' => fn () => Http::response($this->reply, $this->replyStatus)]);
     }
@@ -44,7 +44,7 @@ class PushNotificationsTest extends TestCase
         $postId = $this->postJson('/v1/posts', [
             'caption' => 'Our setup',
             'visibility' => 'public',
-            'media' => [['url' => 'https://example.com/a.jpg', 'type' => 'image']],
+            'media' => [$this->media($author)->id],
         ])->assertCreated()->json('id');
 
         Sanctum::actingAs($liker, ['access']);
@@ -59,13 +59,22 @@ class PushNotificationsTest extends TestCase
         $this->like($author, $liker);
 
         Http::assertSent(fn (Request $r) => $r->url() === 'https://api.onesignal.com/notifications'
-            && $r->hasHeader('Authorization', 'Key rest-key')
+            && $r->hasHeader('Authorization', 'Key os_v2_app_rest-key')
             && $r['app_id'] === 'app-123'
             && $r['target_channel'] === 'push'
             && $r['include_aliases'] === ['external_id' => [$author->id]]
             && $r['headings'] === ['en' => 'New like']
             && $r['contents'] === ['en' => 'Efua Owusu liked your post.']);
         $this->assertSame(1, $author->notifications()->count(), 'still in the in-app list');
+    }
+
+    public function test_legacy_keys_are_sent_as_basic_and_env_quotes_are_trimmed(): void
+    {
+        config(['eventapp.push.onesignal.rest_api_key' => ' "legacyKey123" ']);
+
+        $this->like(User::factory()->create(), User::factory()->create());
+
+        Http::assertSent(fn (Request $r) => $r->hasHeader('Authorization', 'Basic legacyKey123'));
     }
 
     public function test_the_push_switch_in_settings_is_respected(): void

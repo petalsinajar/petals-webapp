@@ -15,7 +15,7 @@ return new class extends Migration
             $table->string('title', 140);
             $table->string('slug', 160)->unique();
             $table->text('description')->nullable();
-            $table->string('cover_url')->nullable();
+            $table->foreignUlid('cover_media_id')->nullable()->constrained('media')->nullOnDelete();
             $table->timestamp('starts_at');
             $table->timestamp('ends_at');
             $table->string('timezone', 40)->default('Africa/Accra');

@@ -3,12 +3,14 @@
 namespace App\Modules\Catalog\Models;
 
 use App\Modules\Identity\Models\Vendor;
+use App\Modules\Media\Models\Media;
 use Database\Factories\ItemFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 /**
  * A rentable product. Each variant is a stockable version with its own quantity, and
@@ -25,7 +27,7 @@ class Item extends Model
     use HasFactory, HasUlids;
 
     protected $fillable = [
-        'vendor_id', 'category_id', 'title', 'description', 'media', 'specs', 'event_types', 'tags',
+        'vendor_id', 'category_id', 'title', 'description', 'specs', 'event_types', 'tags',
         'pricing_unit', 'price_tiers', 'currency', 'deposit_policy', 'damage_deposit_minor',
         'min_qty', 'requires_setup', 'instant_book', 'status',
     ];
@@ -47,7 +49,6 @@ class Item extends Model
     protected function casts(): array
     {
         return [
-            'media' => 'array',
             'specs' => 'array',
             'event_types' => 'array',
             'tags' => 'array',
@@ -85,6 +86,16 @@ class Item extends Model
     public function variants(): HasMany
     {
         return $this->hasMany(ItemVariant::class)->orderBy('sort')->orderBy('id');
+    }
+
+    /**
+     * Photos and videos, in order.
+     *
+     * @return MorphMany<Media, $this>
+     */
+    public function media(): MorphMany
+    {
+        return $this->morphMany(Media::class, 'attachable')->orderBy('position');
     }
 
     /** Unit price in minor units for a quantity, using the best matching tier. */

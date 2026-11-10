@@ -16,8 +16,10 @@ class VendorResource extends JsonResource
             'handle' => $this->handle,
             'name' => $this->name,
             'bio' => $this->bio,
-            'logo_url' => $this->logo_url,
-            'cover_url' => $this->cover_url,
+            'logo_url' => $this->logo_url,   // the logo's thumb
+            'cover_url' => $this->cover_url, // the cover's feed size
+            'logo' => $this->logo?->toPayload(),
+            'cover' => $this->cover?->toPayload(),
             'event_types' => $this->event_types ?? [],
             'categories' => $this->categories ?? [],
             'city' => $this->city,

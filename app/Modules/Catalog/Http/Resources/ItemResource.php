@@ -5,6 +5,7 @@ namespace App\Modules\Catalog\Http\Resources;
 use App\Modules\Catalog\Models\Item;
 use App\Modules\Catalog\Models\ItemVariant;
 use App\Modules\Identity\Http\Resources\VendorSummary;
+use App\Modules\Media\Services\MediaLibrary;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -19,7 +20,7 @@ class ItemResource extends JsonResource
             'category_id' => $this->category_id,
             'title' => $this->title,
             'description' => $this->description,
-            'media' => $this->media ?? [],
+            'media' => MediaLibrary::payloads($this->media),
             'specs' => $this->specs ?: (object) [],
             'event_types' => $this->event_types ?? [],
             'tags' => $this->tags ?? [],

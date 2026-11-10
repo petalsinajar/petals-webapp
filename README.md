@@ -20,6 +20,7 @@ app/
     Payments/   payment gateway (fake | Paystack), payments, append-only ledger, refunds
     Social/     posts with shop tags, follows, reactions, comments, feeds, notifications
     Recommendations/  vendor suggestions for hosts' upcoming events (daily, queued)
+    Media/      direct uploads to R2 / Cloudflare Stream, image renditions, moderation hook, cleanup
   Filament/
     Admin/      users, vendor verification, bookings & disputes, post moderation
     Vendor/     inventory with variants, booking schedule with accept/decline/dispatch/return
@@ -56,6 +57,8 @@ pending_vendor → accepted → confirmed → out_for_delivery → delivered →
 - Errors: `{ "message": "...", "errors": { "field": ["..."] } }`. Out of stock returns **409** with a `stock` object (`variant_id`, `day`, `requested`, `available`).
 - Booking actions are verbs: `POST /v1/bookings/{id}/accept|decline|cancel|dispatch|deliver|return`.
 - `php artisan route:list --path=v1` lists every endpoint.
+- **Images and video** are uploaded first, then referenced by id (see "Uploads" below). Posts, items and packages take `media: [id, …]`; profiles and events take `avatar_media_id`, `logo_media_id`, `cover_media_id`. Responses return media objects:
+  `{ id, kind, status, width, height, blurhash, urls: { thumb, feed, full } | { hls, poster }, duration_ms }` (`urls` is null until `status` is `ready`). `avatar_url` / `logo_url` / `cover_url` are still returned for convenience.
 
 | Area | Main routes |
 | --- | --- |
@@ -65,7 +68,22 @@ pending_vendor → accepted → confirmed → out_for_delivery → delivered →
 | Events | `POST events`, `events/{id}`, `events/{id}/members`, `PUT events/{id}/rsvp`, `events/{id}/posts`, `events/{id}/bookings`, `events/{id}/suggestions` |
 | Suggestions | `POST suggestions/{id}/open`, `POST suggestions/{id}/dismiss`, `vendors/{id}/recommendation-stats?days=` |
 | Checkout | `POST checkouts`, `GET checkouts/{id}`, `POST checkouts/{id}/pay`, `POST webhooks/payments` |
+| Uploads | `POST uploads`, `POST uploads/{id}/complete`, `GET media/{id}`, `POST webhooks/video` |
 | Social | `feed/following`, `feed/discover?event_type=`, `posts`, `posts/{id}/reaction`, `posts/{id}/comments`, `posts/{id}/shop-taps`, `follows`, `notifications` |
+
+## Uploads
+
+Files never pass through this server. The app:
+
+1. `POST /v1/uploads { kind: image|video, mime, bytes, purpose: post|item|avatar|cover|event_cover, vendor_id?, duration_ms? }`. Allowed: JPEG, PNG, HEIC, WebP up to 15 MB; MP4 and MOV up to 200 MB and 3 minutes (`config/eventapp.php` → `media`). Rate limited per user.
+2. Uploads the file as the response says, within 10 minutes:
+   - `upload.method = PUT`: one request to `upload.url` with exactly `upload.headers` (type and size are signed, so a different file is refused by storage).
+   - `upload.method = multipart` (images over 8 MB): PUT each of `upload.parts[].url`, keep each response's `ETag`.
+   - `upload.method = POST` (video): `multipart/form-data` to `upload.url` with the file in `upload.field`, straight to Cloudflare Stream.
+3. `POST /v1/uploads/{media_id}/complete` (with `{ parts: [{ part_number, etag }] }` for multipart). The server checks the file is there with the declared size and real type (magic bytes); a mismatch fails the upload and deletes the file.
+4. Uses the `media_id` right away in a post (it publishes once processing is done), or polls `GET /v1/media/{id}` until `status` is `ready` for anything else.
+
+Processing runs on the `media` queue (`ProcessMedia`, idempotent): images are auto-rotated, stripped of all metadata (EXIF, GPS), saved as WebP at 320 / 1080 / 2048 px with a blurhash, and the original is deleted. Videos are transcoded to HLS by Stream, which calls `POST /v1/webhooks/video` when done (signature checked). Every media passes `ContentModeration` before it's ready (a no-op `AllowAllModeration` until a real service is bound in `AppServiceProvider`). Rows store keys only; URLs are built from `MEDIA_CDN_URL` / `CLOUDFLARE_STREAM_DELIVERY_URL` when responding. Uploads never attached to anything are deleted after 24 hours (`media:prune`, daily), and a post's or item's media is deleted with it.
 
 ## Local setup
 
@@ -93,7 +111,7 @@ php artisan migrate
 php artisan db:seed        # users, vendors, an event, categories and demo items
 
 php artisan serve          # API on http://localhost:8000/v1
-php artisan queue:work --queue=default,recommendations   # or: php artisan horizon
+php artisan queue:work --queue=default,media,recommendations   # or: php artisan horizon
 php artisan schedule:work  # hold sweeper, completions, feed ranking
 ```
 
@@ -132,9 +150,9 @@ The server stays stateless: data lives in managed services, so a server can be r
      CREATE EXTENSION IF NOT EXISTS postgis;
      ```
      (The migration also runs this, but the app's database user usually lacks the `rds_superuser` rights it needs.)
-   - **S3** bucket (plus CloudFront) for media. Redis on the server is fine to start; move to ElastiCache when you add a second server.
+   - **Cloudflare R2 + Stream** for media (next section). Redis on the server is fine to start; move to ElastiCache when you add a second server.
 2. **Forge**: connect your AWS account, create an app server (2 vCPU / 4 GB is plenty to start) with PHP 8.3+ (Forge's PHP includes `pdo_pgsql`).
-3. **Site**: point it at your Git repository, set the environment from `.env.example` with production values (`APP_ENV=production`, `APP_DEBUG=false`, `DB_CONNECTION=pgsql` with the RDS credentials and `DB_SSLMODE=require`, `PAYMENT_GATEWAY=paystack`, `FILESYSTEM_DISK=s3`), and enable HTTPS with Let's Encrypt.
+3. **Site**: point it at your Git repository, set the environment from `.env.example` with production values (`APP_ENV=production`, `APP_DEBUG=false`, `DB_CONNECTION=pgsql` with the RDS credentials and `DB_SSLMODE=require`, `PAYMENT_GATEWAY=paystack`, the `R2_*`, `MEDIA_CDN_URL` and `CLOUDFLARE_*` media settings), and enable HTTPS with Let's Encrypt.
 4. **Deploy script** (Forge's default, plus):
    ```bash
    php artisan migrate --force
@@ -144,7 +162,7 @@ The server stays stateless: data lives in managed services, so a server can be r
    ```
 5. **Daemons**: `php artisan horizon` and, when chat ships, `php artisan reverb:start`. **Scheduler**: enable it in Forge (runs `schedule:run` every minute).
 
-   **Horizon queues.** Jobs use two queues: `default` (notifications, feed fan-out) and `recommendations` (vendor suggestions: the daily `recommendations:run` fan-out, its notifications and booking attribution). Give `recommendations` its own supervisor in `config/horizon.php` with a low process count (1–2) and `'balance' => false`, so a big daily run never delays the `default` queue the API depends on:
+   **Horizon queues.** Jobs use three queues: `default` (notifications, feed fan-out), `media` (image processing and media deletion: CPU-heavy, give it its own supervisor with 2–4 processes and `'timeout' => 180`) and `recommendations` (vendor suggestions: the daily `recommendations:run` fan-out, its notifications and booking attribution). Give `recommendations` its own supervisor in `config/horizon.php` with a low process count (1–2) and `'balance' => false`, so a big daily run never delays the `default` queue the API depends on:
 
    ```php
    'supervisor-recommendations' => [
@@ -155,7 +173,33 @@ The server stays stateless: data lives in managed services, so a server can be r
        'timeout' => 120,
    ],
    ```
+   ```php
+   'supervisor-media' => [
+       'connection' => 'redis',
+       'queue' => ['media'],
+       'maxProcesses' => 3,
+       'tries' => 3,
+       'timeout' => 180,
+       'memory' => 512, // decoding a 15 MB HEIC needs room
+   ],
+   ```
+
+   The server needs the `imagick` PHP extension with HEIC support (`sudo apt install php8.5-imagick libheif1`), or set `MEDIA_IMAGE_DRIVER=gd` (no HEIC).
 6. **Paystack**: set the webhook URL to `https://your-domain/v1/webhooks/payments`.
+7. **Media: Cloudflare R2 and Stream.**
+   - **R2 bucket** (R2 → Create bucket, e.g. `petals-media`), left **private**. Create an R2 API token with *Object Read & Write* on that bucket and set `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` and `R2_ENDPOINT=https://<account_id>.r2.cloudflarestorage.com`.
+   - **CORS** on the bucket so the app (and any web client) can PUT directly:
+     ```json
+     [{ "AllowedOrigins": ["*"], "AllowedMethods": ["PUT"], "AllowedHeaders": ["content-type", "content-length"], "ExposeHeaders": ["ETag"], "MaxAgeSeconds": 3600 }]
+     ```
+   - **CDN**: bucket → Settings → *Custom domains* → connect e.g. `media.petalsinajar.com` (served and cached by Cloudflare). Set `MEDIA_CDN_URL=https://media.petalsinajar.com`. Only processed renditions live under `media/`; originals under `uploads/` are deleted after processing. To keep them unreachable even meanwhile, add a WAF rule on the custom domain blocking `starts_with(http.request.uri.path, "/uploads/")`.
+   - **Stream**: enable Stream on the account, create an API token with *Stream: Edit*, and set `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_STREAM_TOKEN`. Copy the customer subdomain (Stream → any video → embed) into `CLOUDFLARE_STREAM_DELIVERY_URL=https://customer-<code>.cloudflarestream.com`.
+   - **Stream webhook**: register `https://your-domain/v1/webhooks/video` once:
+     ```bash
+     curl -X PUT "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/stream/webhook" \
+       -H "Authorization: Bearer $CLOUDFLARE_STREAM_TOKEN" -d '{"notificationUrl":"https://your-domain/v1/webhooks/video"}'
+     ```
+     The response's `secret` goes in `CLOUDFLARE_STREAM_WEBHOOK_SECRET`.
 
 ## What's next
 

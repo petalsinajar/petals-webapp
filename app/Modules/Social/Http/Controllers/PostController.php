@@ -4,6 +4,7 @@ namespace App\Modules\Social\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Identity\Models\User;
+use App\Modules\Media\Services\MediaLibrary;
 use App\Modules\Social\Models\Post;
 use App\Modules\Social\Models\PostTag;
 use App\Modules\Social\Notifications\PostLiked;
@@ -30,13 +31,10 @@ class PostController extends Controller
             'kind' => ['nullable', Rule::in(['post', 'reel', 'showcase'])],
             'caption' => ['nullable', 'string', 'max:2200'],
             'visibility' => ['nullable', Rule::in(['public', 'followers', 'event_members'])],
+            // Media ids from POST /v1/uploads. May still be processing: the post then
+            // publishes by itself once all of them are ready.
             'media' => ['required', 'array', 'min:1', 'max:10'],
-            'media.*.url' => ['required', 'url', 'max:500'],
-            'media.*.type' => ['required', Rule::in(['image', 'video'])],
-            'media.*.w' => ['nullable', 'integer', 'min:1'],
-            'media.*.h' => ['nullable', 'integer', 'min:1'],
-            'media.*.blurhash' => ['nullable', 'string', 'max:100'],
-            'media.*.duration_ms' => ['nullable', 'integer', 'min:0'],
+            'media.*' => ['ulid', 'distinct'],
             'tags' => ['sometimes', 'array', 'max:30'],
             'tags.*.media_index' => ['required', 'integer', 'min:0'],
             'tags.*.x' => ['required', 'numeric', 'between:0,1'],
@@ -82,10 +80,14 @@ class PostController extends Controller
         abort_unless($canDelete, 403);
 
         DB::transaction(function () use ($post) {
+            $wasPublished = $post->status === 'published';
             $post->update(['status' => 'removed']);
             $post->delete();
-            $post->author?->decrement('posts_count');
-            $post->event?->decrement('posts_count');
+            if ($wasPublished) {
+                $post->author?->decrement('posts_count');
+                $post->event?->decrement('posts_count');
+            }
+            app(MediaLibrary::class)->discardFor($post); // photos and videos go with it
         });
 
         return response()->json(['message' => 'Post deleted.']);

@@ -34,7 +34,6 @@ return new class extends Migration
             $table->string('category_id', 40);
             $table->string('title', 120);
             $table->text('description')->nullable();
-            $table->json('media')->nullable();          // [{url,type,w,h,blurhash}]
             $table->jsonb('specs')->nullable();         // category-specific details (attributes_schema)
             $table->json('event_types')->nullable();    // ["wedding","birthday","corporate"]
             $table->json('tags')->nullable();
@@ -83,7 +82,6 @@ return new class extends Migration
             $table->unsignedInteger('guest_max')->nullable();
             $table->unsignedBigInteger('price_minor'); // fixed bundle price
             $table->string('currency', 3);
-            $table->json('media')->nullable();
             $table->string('status', 20)->default('active'); // active | paused | archived
             $table->timestamps();
 

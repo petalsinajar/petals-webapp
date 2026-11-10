@@ -39,7 +39,7 @@ class PostLiked extends Notification implements HasPushMessage, ShouldQueue
             'actor' => ['type' => 'user', 'id' => $this->liker->id, 'handle' => $this->liker->handle,
                 'name' => $this->liker->display_name, 'avatar_url' => $this->liker->avatar_url],
             'target' => ['type' => 'post', 'id' => $this->post->id],
-            'thumbnail' => $this->post->media[0]['url'] ?? null,
+            'thumbnail' => $this->post->media->first()?->url('thumb'),
             'group_key' => 'post_liked:'.$this->post->id,
         ];
     }

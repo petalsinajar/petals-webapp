@@ -6,6 +6,8 @@ use App\Modules\Catalog\Contracts\CatalogReader;
 use App\Modules\Events\Models\Event;
 use App\Modules\Identity\Models\User;
 use App\Modules\Identity\Models\Vendor;
+use App\Modules\Media\Enums\MediaStatus;
+use App\Modules\Media\Services\MediaLibrary;
 use App\Modules\Social\Jobs\FanOutPost;
 use App\Modules\Social\Models\Post;
 use App\Support\Actor;
@@ -15,7 +17,10 @@ use Illuminate\Validation\ValidationException;
 
 class PostService
 {
-    public function __construct(private readonly CatalogReader $catalog) {}
+    public function __construct(
+        private readonly CatalogReader $catalog,
+        private readonly MediaLibrary $media,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $data  validated input (see PostController::store)
@@ -40,9 +45,12 @@ class PostService
             }
         }
 
-        $tags = $this->resolveTags($data['tags'] ?? [], $actor, count($data['media']));
+        $media = $this->media->resolve($data['media'], $poster, $author instanceof Vendor ? $author : null,
+            config('eventapp.media.purposes.post'), 'media', allowProcessing: true);
+        $ready = $media->every(fn ($m) => $m->status === MediaStatus::Ready);
+        $tags = $this->resolveTags($data['tags'] ?? [], $actor, $media->count());
 
-        $post = DB::transaction(function () use ($poster, $actor, $event, $data, $tags, $author) {
+        $post = DB::transaction(function () use ($poster, $actor, $event, $data, $tags, $media, $ready) {
             $post = Post::create([
                 'author_type' => $actor->type,
                 'author_id' => $actor->id,
@@ -51,25 +59,55 @@ class PostService
                 'event_type' => $event?->type,
                 'kind' => $data['kind'] ?? ($actor->type === Actor::VENDOR ? 'showcase' : 'post'),
                 'caption' => $data['caption'] ?? null,
-                'media' => array_values($data['media']),
                 'hashtags' => $this->hashtags($data['caption'] ?? ''),
                 'visibility' => $data['visibility'] ?? 'public',
-                'status' => 'published',
+                'status' => $ready ? 'published' : 'processing',
             ]);
 
             foreach ($tags as $tag) {
                 $post->tags()->create($tag);
             }
+            $this->media->attach($media, $post);
 
-            $author->increment('posts_count');
-            $event?->increment('posts_count');
+            if ($ready) {
+                $this->published($post);
+            }
 
             return $post;
         });
 
-        FanOutPost::dispatch($post->id)->afterCommit();
+        return $post->load('tags', 'author', 'event', 'media');
+    }
 
-        return $post->load('tags', 'author', 'event');
+    /**
+     * A processing post's media changed: publish it once everything is ready, or mark it
+     * failed if any of its media failed. Safe to call repeatedly.
+     */
+    public function mediaChanged(string $postId): void
+    {
+        DB::transaction(function () use ($postId) {
+            $post = Post::whereKey($postId)->lockForUpdate()->first();
+            if (! $post || $post->status !== 'processing') {
+                return;
+            }
+
+            $statuses = $post->media()->pluck('status')->map(fn ($s) => $s instanceof MediaStatus ? $s : MediaStatus::from($s));
+            if ($statuses->contains(fn (MediaStatus $s) => in_array($s, [MediaStatus::Failed, MediaStatus::Rejected], true))) {
+                $post->update(['status' => 'failed']);
+            } elseif ($statuses->isNotEmpty() && $statuses->every(fn (MediaStatus $s) => $s === MediaStatus::Ready)) {
+                $post->update(['status' => 'published', 'created_at' => now()]);
+                $this->published($post);
+            }
+        });
+    }
+
+    /** Counters and feeds, once a post goes public. */
+    private function published(Post $post): void
+    {
+        $post->author?->increment('posts_count');
+        $post->event?->increment('posts_count');
+
+        FanOutPost::dispatch($post->id)->afterCommit();
     }
 
     /**

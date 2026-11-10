@@ -16,7 +16,6 @@ return new class extends Migration
             $table->string('event_type', 20)->nullable();     // copied from the event for feed filters
             $table->string('kind', 20)->default('post');      // post | reel | showcase
             $table->text('caption')->nullable();
-            $table->json('media');                            // [{url,type,w,h,blurhash}]
             $table->json('hashtags')->nullable();
             $table->string('visibility', 20)->default('public'); // public | followers | event_members
             $table->unsignedInteger('likes_count')->default(0);
@@ -24,7 +23,8 @@ return new class extends Migration
             $table->unsignedInteger('saves_count')->default(0);
             $table->unsignedInteger('shop_taps_count')->default(0);
             $table->double('score')->default(0);
-            $table->string('status', 20)->default('published'); // draft | published | hidden | removed
+            // processing (waiting for its media) | published | failed (media failed) | hidden | removed
+            $table->string('status', 20)->default('published');
             $table->timestamps();
             $table->softDeletes();
 
@@ -38,7 +38,7 @@ return new class extends Migration
         Schema::create('post_tags', function (Blueprint $table) {
             $table->ulid('id')->primary();
             $table->foreignUlid('post_id')->constrained()->cascadeOnDelete();
-            $table->unsignedTinyInteger('media_index')->default(0);
+            $table->unsignedTinyInteger('media_index')->default(0); // position of the photo in the post
             $table->decimal('x', 5, 4); // 0..1 from the left
             $table->decimal('y', 5, 4); // 0..1 from the top
             $table->string('target_type', 20); // item | vendor | user

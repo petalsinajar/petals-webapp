@@ -10,7 +10,9 @@ use App\Modules\Identity\Http\Controllers\MeController;
 use App\Modules\Identity\Http\Controllers\ProfileController;
 use App\Modules\Identity\Http\Controllers\VendorController;
 use App\Modules\Identity\Http\Controllers\VendorMemberController;
+use App\Modules\Media\Http\Controllers\MediaController;
 use App\Modules\Media\Http\Controllers\UploadController;
+use App\Modules\Media\Http\Controllers\VideoWebhookController;
 use App\Modules\Payments\Http\Controllers\PaymentWebhookController;
 use App\Modules\Recommendations\Http\Controllers\SuggestionController;
 use App\Modules\Social\Http\Controllers\CommentController;
@@ -35,6 +37,7 @@ Route::prefix('auth')->middleware('throttle:otp')->group(function () {
 Route::post('auth/refresh', [AuthController::class, 'refresh'])->middleware('throttle:api');
 
 Route::post('webhooks/payments', PaymentWebhookController::class);
+Route::post('webhooks/video', VideoWebhookController::class);
 
 if (app()->environment(['local', 'testing'])) {
     Route::post('dev/payments/{payment}/succeed', [PaymentWebhookController::class, 'devSucceed']);
@@ -74,7 +77,9 @@ Route::middleware(['auth:sanctum', 'abilities:access', 'active', 'throttle:api']
     Route::get('users/{user}/posts', [FeedController::class, 'userPosts'])->whereUlid('user');
 
     // Media
-    Route::post('uploads', UploadController::class)->middleware('throttle:uploads');
+    Route::post('uploads', [UploadController::class, 'store'])->middleware('throttle:uploads');
+    Route::post('uploads/{media}/complete', [UploadController::class, 'complete'])->whereUlid('media');
+    Route::get('media/{media}', [MediaController::class, 'show'])->whereUlid('media');
 
     // Vendors
     Route::post('vendors', [VendorController::class, 'store']);

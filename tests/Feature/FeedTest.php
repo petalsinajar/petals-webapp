@@ -19,7 +19,7 @@ class FeedTest extends TestCase
         return $this->postJson('/v1/posts', array_merge([
             'caption' => 'Our setup for Saturday',
             'visibility' => 'public',
-            'media' => [['url' => 'https://example.com/a.jpg', 'type' => 'image', 'w' => 1080, 'h' => 1350]],
+            'media' => [$this->media($author)->id],
         ], $overrides))->assertCreated()->json('id');
     }
 

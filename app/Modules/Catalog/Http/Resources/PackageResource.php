@@ -5,6 +5,7 @@ namespace App\Modules\Catalog\Http\Resources;
 use App\Modules\Catalog\Models\Package;
 use App\Modules\Catalog\Models\PackageLine;
 use App\Modules\Identity\Http\Resources\VendorSummary;
+use App\Modules\Media\Services\MediaLibrary;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -28,7 +29,7 @@ class PackageResource extends JsonResource
             ])->values(),
             'price_minor' => (int) $this->price_minor,
             'currency' => $this->currency ?? config('eventapp.currency'),
-            'media' => $this->media ?? [],
+            'media' => MediaLibrary::payloads($this->media),
             'status' => $this->status,
         ];
     }

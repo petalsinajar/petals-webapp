@@ -5,6 +5,8 @@ namespace App\Modules\Social\Services;
 use App\Modules\Catalog\Contracts\CatalogReader;
 use App\Modules\Identity\Http\Resources\ActorResource;
 use App\Modules\Identity\Models\User;
+use App\Modules\Identity\Models\Vendor;
+use App\Modules\Media\Models\Media;
 use App\Modules\Social\Models\Post;
 use App\Modules\Social\Models\PostTag;
 use App\Support\Actor;
@@ -31,7 +33,8 @@ class PostPresenter
             return [];
         }
 
-        $posts->loadMissing(['author', 'event:id,title,type,starts_at', 'tags']);
+        $posts->loadMissing(['author', 'event:id,title,type,starts_at', 'tags', 'media']);
+        $posts->loadMorph('author', [User::class => ['avatar'], Vendor::class => ['logo']]);
 
         $itemIds = $posts->flatMap(fn (Post $p) => $p->tags->where('target_type', 'item')->pluck('target_id'))->unique()->values()->all();
         $items = $this->catalog->cards($itemIds);
@@ -73,8 +76,9 @@ class PostPresenter
             'kind' => $post->kind,
             'caption' => $post->caption,
             'hashtags' => $post->hashtags ?? [],
-            'media' => collect($post->media)->map(fn (array $m, int $i) => [
-                ...$m,
+            'status' => $post->status, // processing until its media is ready
+            'media' => $post->media->values()->map(fn (Media $m, int $i) => [
+                ...$m->toPayload(),
                 'tags' => ($tagsByMedia->get($i) ?? collect())->map(fn (PostTag $t) => [
                     'id' => $t->id,
                     'x' => $t->x,

@@ -3,7 +3,9 @@
 namespace App\Modules\Events\Models;
 
 use App\Modules\Identity\Models\User;
+use App\Modules\Media\Models\Media;
 use Database\Factories\EventFactory;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -30,7 +32,7 @@ class Event extends Model
     ];
 
     protected $fillable = [
-        'type', 'title', 'description', 'cover_url', 'starts_at', 'ends_at', 'timezone',
+        'type', 'title', 'description', 'cover_media_id', 'starts_at', 'ends_at', 'timezone',
         'venue_name', 'venue_address', 'venue_city', 'venue_lat', 'venue_lng', 'guest_count', 'budget_minor',
         'currency', 'visibility', 'theme', 'company', 'status',
     ];
@@ -52,6 +54,17 @@ class Event extends Model
     protected static function newFactory(): EventFactory
     {
         return EventFactory::new();
+    }
+
+    /** @return BelongsTo<Media, $this> */
+    public function cover(): BelongsTo
+    {
+        return $this->belongsTo(Media::class, 'cover_media_id');
+    }
+
+    protected function coverUrl(): Attribute
+    {
+        return Attribute::get(fn () => $this->cover?->url('feed'));
     }
 
     /** @return BelongsTo<User, $this> */

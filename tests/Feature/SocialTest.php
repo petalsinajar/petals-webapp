@@ -15,9 +15,10 @@ class SocialTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function photo(): array
+    /** A ready photo uploaded by whoever is signed in. */
+    private function photo(): string
     {
-        return ['url' => 'https://cdn.example.com/p/1.jpg', 'type' => 'image', 'w' => 1080, 'h' => 1350, 'blurhash' => 'LEHV6nWB2yk8pyo0adR*.7kCMdnj'];
+        return $this->media($this->signedIn)->id;
     }
 
     public function test_following_puts_posts_in_my_feed(): void

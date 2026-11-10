@@ -85,6 +85,21 @@ class BookingWithoutPaymentTest extends TestCase
         $this->postJson("/v1/bookings/{$booking['id']}/dispatch")->assertOk()->assertJsonPath('status', 'out_for_delivery');
     }
 
+    public function test_the_vendors_requests_list_loads_as_the_app_asks_for_it(): void
+    {
+        $booking = $this->request();
+        $this->signIn($this->owner);
+        $this->postJson("/v1/bookings/{$booking['id']}/accept")->assertOk();
+        $this->request(qty: 10);
+
+        // Exactly the app's query: status[]=…&status[]=…
+        $this->signIn($this->owner);
+        $this->getJson("/v1/vendors/{$this->vendor->id}/bookings?status%5B%5D=pending_vendor")
+            ->assertOk()->assertJsonCount(1, 'data');
+        $this->getJson("/v1/vendors/{$this->vendor->id}/bookings?status%5B%5D=accepted&status%5B%5D=confirmed&status%5B%5D=out_for_delivery&status%5B%5D=delivered")
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.status', 'confirmed');
+    }
+
     public function test_declining_frees_the_stock_and_tells_the_customer(): void
     {
         $booking = $this->request();

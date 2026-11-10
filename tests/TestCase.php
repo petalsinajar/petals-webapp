@@ -10,6 +10,12 @@ use App\Modules\Catalog\Models\Item;
 use App\Modules\Catalog\Services\SqlCatalogReader;
 use App\Modules\Identity\Models\User;
 use App\Modules\Identity\Models\Vendor;
+use App\Modules\Media\Contracts\MediaStorage;
+use App\Modules\Media\Contracts\VideoProvider;
+use App\Modules\Media\Enums\MediaStatus;
+use App\Modules\Media\Models\Media;
+use App\Modules\Media\Storage\FakeMediaStorage;
+use App\Modules\Media\Video\FakeVideoProvider;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Laravel\Sanctum\Sanctum;
 
@@ -19,6 +25,9 @@ use Laravel\Sanctum\Sanctum;
  */
 abstract class TestCase extends BaseTestCase
 {
+    /** Whoever signIn() last signed in. */
+    protected ?User $signedIn = null;
+
     protected function catalog(): SqlCatalogReader
     {
         return $this->app->make(CatalogReader::class);
@@ -34,7 +43,7 @@ abstract class TestCase extends BaseTestCase
         $user ??= User::factory()->create();
         Sanctum::actingAs($user, ['access']);
 
-        return $user;
+        return $this->signedIn = $user;
     }
 
     /**
@@ -69,5 +78,39 @@ abstract class TestCase extends BaseTestCase
             ]);
 
         return $this->catalog()->variant($item->id, $item->variants()->value('id'));
+    }
+
+    protected function mediaStorage(): FakeMediaStorage
+    {
+        return $this->app->make(MediaStorage::class);
+    }
+
+    protected function videoProvider(): FakeVideoProvider
+    {
+        return $this->app->make(VideoProvider::class);
+    }
+
+    /** An upload owned by $owner, ready by default (as if processed), for attaching in tests. */
+    protected function media(User $owner, string $kind = 'image', MediaStatus $status = MediaStatus::Ready, ?Vendor $vendor = null): Media
+    {
+        $ready = $status === MediaStatus::Ready;
+
+        return Media::create([
+            'owner_id' => $owner->id,
+            'vendor_id' => $vendor?->id,
+            'kind' => $kind,
+            'purpose' => 'post',
+            'status' => $status,
+            'mime' => $kind === 'image' ? 'image/jpeg' : 'video/mp4',
+            'bytes' => 120_000,
+            'width' => 1080,
+            'height' => 1350,
+            'blurhash' => $ready ? 'LEHV6nWB2yk8pyo0adR*.7kCMdnj' : null,
+            'variants' => match (true) {
+                ! $ready => null,
+                $kind === 'image' => ['thumb' => 'media/t/thumb.webp', 'feed' => 'media/t/feed.webp', 'full' => 'media/t/full.webp'],
+                default => ['hls' => 'v/manifest/video.m3u8', 'poster' => 'v/thumbnails/thumbnail.jpg'],
+            },
+        ]);
     }
 }

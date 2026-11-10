@@ -22,7 +22,6 @@ class UserFactory extends Factory
             'handle' => Str::lower(Str::slug(Str::limit($name, 18, ''), '.')).'.'.fake()->unique()->numberBetween(100, 99999),
             'display_name' => $name,
             'phone' => '+23324'.fake()->unique()->numerify('#######'),
-            'avatar_url' => null,
             'city' => 'Accra',
         ];
     }

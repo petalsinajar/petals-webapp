@@ -27,6 +27,9 @@ use Filament\Tables\Table;
  * and Vendor::items(). Variants are saved through the relationship, so ItemVariant's hooks
  * apply here exactly as in the API: quantity changes reach the day counters, and removing a
  * variant that bookings point at deactivates it instead.
+ *
+ * Photos aren't edited here: they upload straight from the app to storage (POST /v1/uploads),
+ * which a dashboard form can't do without passing the file through this server.
  */
 class ItemResource extends Resource
 {
@@ -80,13 +83,6 @@ class ItemResource extends Resource
                     ]),
             ]),
 
-            Section::make('Photos')->schema([
-                Repeater::make('media')->columns(3)
-                    ->schema([
-                        TextInput::make('url')->url()->required()->columnSpan(2),
-                        Select::make('type')->options(['image' => 'Image', 'video' => 'Video'])->default('image')->required(),
-                    ]),
-            ]),
         ]);
     }
 

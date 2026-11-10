@@ -77,6 +77,35 @@ class InventoryTest extends TestCase
         $this->getJson("/v1/items/{$item['id']}")->assertOk()->assertJsonCount(2, 'variants');
     }
 
+    public function test_photos_alone_can_be_replaced_from_the_app_leaving_the_rest(): void
+    {
+        $item = $this->createItem();
+        $staff = User::factory()->create();
+        $this->vendor->members()->create(['user_id' => $staff->id, 'role' => 'staff', 'status' => 'active']);
+
+        // The owner's own photo, and one a staff member uploaded for the business.
+        $mine = $this->media($this->owner);
+        $teams = $this->media($staff, vendor: $this->vendor);
+
+        $this->signIn($this->owner);
+        $this->patchJson("/v1/vendors/{$this->vendor->id}/items/{$item['id']}", ['media' => [$teams->id, $mine->id]])
+            ->assertOk()
+            ->assertJsonPath('media.0.id', $teams->id)
+            ->assertJsonPath('media.0.urls.feed', 'https://cdn.test/media/t/feed.webp')
+            ->assertJsonPath('media.1.id', $mine->id)
+            ->assertJsonPath('title', 'Chiavari chair')
+            ->assertJsonPath('pricing.tiers.1.price_minor', 1200)
+            ->assertJsonCount(2, 'variants');
+
+        // Dropping a photo deletes it.
+        $this->patchJson("/v1/vendors/{$this->vendor->id}/items/{$item['id']}", ['media' => [$mine->id]])
+            ->assertOk()->assertJsonCount(1, 'media');
+        $this->assertModelMissing($teams);
+
+        $this->signIn($staff);
+        $this->patchJson("/v1/vendors/{$this->vendor->id}/items/{$item['id']}", ['media' => []])->assertForbidden();
+    }
+
     public function test_update_matches_variants_by_id_adds_new_ones_and_deletes_unused_ones(): void
     {
         $item = $this->createItem();

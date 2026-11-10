@@ -35,8 +35,8 @@ return new class extends Migration
             $table->string('handle', 30)->unique();
             $table->string('name', 120);
             $table->text('bio')->nullable();
-            $table->string('logo_url')->nullable();
-            $table->string('cover_url')->nullable();
+            $table->ulid('logo_media_id')->nullable();  // foreign keys added with the media table
+            $table->ulid('cover_media_id')->nullable();
             $table->json('event_types')->nullable();   // ["wedding","birthday","corporate"]
             $table->json('categories')->nullable();    // category slugs
             $table->string('city', 80)->nullable();

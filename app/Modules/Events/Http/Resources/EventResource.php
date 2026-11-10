@@ -18,7 +18,8 @@ class EventResource extends JsonResource
             'title' => $this->title,
             'slug' => $this->slug,
             'description' => $this->description,
-            'cover_url' => $this->cover_url,
+            'cover_url' => $this->cover_url, // the cover's feed size
+            'cover' => $this->cover?->toPayload(),
             'starts_at' => $this->starts_at->toIso8601String(),
             'ends_at' => $this->ends_at->toIso8601String(),
             'timezone' => $this->timezone,

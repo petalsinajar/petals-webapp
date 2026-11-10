@@ -8,6 +8,7 @@ use App\Modules\Events\Models\Event;
 use App\Modules\Events\Models\EventMember;
 use App\Modules\Identity\Http\Resources\UserResource;
 use App\Modules\Identity\Models\User;
+use App\Modules\Media\Services\MediaLibrary;
 use App\Support\Paginated;
 use App\Support\PhoneNumber;
 use Illuminate\Http\JsonResponse;
@@ -19,13 +20,17 @@ use Illuminate\Validation\Rule;
 
 class EventController extends Controller
 {
+    public function __construct(private readonly MediaLibrary $media) {}
+
     /** POST /v1/events */
     public function store(Request $request): EventResource
     {
         $data = $request->validate($this->rules());
         $user = $request->user();
+        $cover = $this->media->resolveOne($data['cover_media_id'] ?? null, $user, null, 'cover_media_id');
+        $data['cover_media_id'] = $cover?->id;
 
-        $event = DB::transaction(function () use ($data, $user) {
+        $event = DB::transaction(function () use ($data, $user, $cover) {
             $event = new Event($data);
             $event->host_id = $user->id;
             $event->currency ??= config('eventapp.currency');
@@ -35,6 +40,7 @@ class EventController extends Controller
             $event->save();
 
             $event->members()->create(['user_id' => $user->id, 'role' => 'host', 'rsvp' => 'going']);
+            $this->media->attach([$cover], $event);
 
             return $event;
         });
@@ -78,7 +84,22 @@ class EventController extends Controller
     public function update(Request $request, Event $event): EventResource
     {
         Gate::authorize('manage', $event);
-        $event->fill($request->validate($this->rules(partial: true)))->save();
+        $data = $request->validate($this->rules(partial: true));
+        $cover = array_key_exists('cover_media_id', $data)
+            ? $this->media->resolveOne($data['cover_media_id'], $request->user(), null, 'cover_media_id', for: $event)
+            : false;
+        if ($cover !== false) {
+            $data['cover_media_id'] = $cover?->id;
+        }
+
+        DB::transaction(function () use ($event, $data, $cover) {
+            $event->fill($data)->save();
+            if ($cover !== false) {
+                $this->media->attach([$cover], $event);
+                $this->media->releaseExcept($event, [$event->cover_media_id]);
+                $event->unsetRelation('cover');
+            }
+        });
 
         return new EventResource($event->load('host'));
     }
@@ -192,7 +213,7 @@ class EventController extends Controller
             'type' => [$req, Rule::in(Event::TYPES)],
             'title' => [$req, 'string', 'max:140'],
             'description' => ['sometimes', 'nullable', 'string', 'max:5000'],
-            'cover_url' => ['sometimes', 'nullable', 'url', 'max:500'],
+            'cover_media_id' => ['sometimes', 'nullable', 'ulid'], // a ready image from POST /v1/uploads
             'starts_at' => [$req, 'date'],
             'ends_at' => [$req, 'date', 'after:starts_at'],
             'timezone' => ['sometimes', 'timezone:all'],

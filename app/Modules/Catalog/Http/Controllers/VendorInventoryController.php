@@ -13,8 +13,11 @@ use App\Modules\Catalog\Models\ItemVariant;
 use App\Modules\Catalog\Models\Package;
 use App\Modules\Catalog\Services\CapacityWarnings;
 use App\Modules\Identity\Models\Vendor;
+use App\Modules\Media\Models\Media;
+use App\Modules\Media\Services\MediaLibrary;
 use App\Support\Paginated;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -30,6 +33,7 @@ class VendorInventoryController extends Controller
     public function __construct(
         private readonly AvailabilityStore $store,
         private readonly CapacityWarnings $warnings,
+        private readonly MediaLibrary $media,
     ) {}
 
     /** GET /v1/vendors/{vendor}/items — every status, for the vendor's own inventory screen. */
@@ -37,7 +41,7 @@ class VendorInventoryController extends Controller
     {
         Gate::authorize('operate', $vendor);
 
-        $items = Item::with('variants')->where('vendor_id', $vendor->id)
+        $items = Item::with('variants', 'media')->where('vendor_id', $vendor->id)
             ->when($request->query('status'), fn ($q, $status) => $q->where('status', $status))
             ->orderBy('title')
             ->get();
@@ -50,17 +54,19 @@ class VendorInventoryController extends Controller
     {
         Gate::authorize('manage', $vendor);
         $data = $request->validate($this->itemRules());
+        $media = $this->itemMedia($data['media'] ?? [], $request, $vendor, null);
 
-        $item = DB::transaction(function () use ($data, $vendor) {
+        $item = DB::transaction(function () use ($data, $vendor, $media) {
             $item = new Item($this->itemAttributes($data) + ['currency' => config('eventapp.currency')]);
             $item->vendor_id = $vendor->id;
             $item->save();
             $this->syncVariants($item, $data['variants']);
+            $this->media->attach($media, $item);
 
             return $item;
         });
 
-        return (new ItemResource($item->load('variants')))->response()->setStatusCode(201);
+        return (new ItemResource($item->load('variants', 'media')))->response()->setStatusCode(201);
     }
 
     /**
@@ -76,11 +82,17 @@ class VendorInventoryController extends Controller
         Gate::authorize('manage', $vendor);
         $model = $this->ownedItem($vendor, $item);
         $data = $request->validate($this->itemRules(partial: true));
+        $media = array_key_exists('media', $data) ? $this->itemMedia($data['media'], $request, $vendor, $model) : null;
 
-        DB::transaction(function () use ($model, $data) {
+        DB::transaction(function () use ($model, $data, $media) {
             $model->fill($this->itemAttributes($data))->save();
             if (array_key_exists('variants', $data)) {
                 $this->syncVariants($model, $data['variants']);
+            }
+            // `media` is the full, ordered list; photos left out are deleted.
+            if ($media !== null) {
+                $this->media->attach($media, $model);
+                $this->media->releaseExcept($model, $media->modelKeys());
             }
         });
 
@@ -90,14 +102,19 @@ class VendorInventoryController extends Controller
             'message' => 'More units are already booked than you now have on these days.',
         ], $this->warnings->pull($model->id));
 
-        return response()->json([...(new ItemResource($model->load('variants')))->resolve(), 'warnings' => $warnings]);
+        return response()->json([...(new ItemResource($model->load('variants', 'media')))->resolve(), 'warnings' => $warnings]);
     }
 
     /** DELETE /v1/vendors/{vendor}/items/{item} — archived, never hard-deleted (bookings point at it). */
     public function destroy(Vendor $vendor, string $item): JsonResponse
     {
         Gate::authorize('manage', $vendor);
-        $this->ownedItem($vendor, $item)->update(['status' => 'archived']);
+        $model = $this->ownedItem($vendor, $item);
+
+        DB::transaction(function () use ($model) {
+            $model->update(['status' => 'archived']);
+            $this->media->discardFor($model); // bookings keep their own snapshot, not the photos
+        });
 
         return response()->json(['message' => 'Item archived.']);
     }
@@ -118,16 +135,18 @@ class VendorInventoryController extends Controller
             'lines.*.variant_id' => ['required', 'ulid'],
             'lines.*.qty' => ['required', 'integer', 'min:1'],
             'price_minor' => ['required', 'integer', 'min:0'],
-            'media' => ['array', 'max:10'],
+            'media' => ['sometimes', 'array', 'max:10'],
+            'media.*' => ['ulid', 'distinct'],
         ]);
+        $media = $this->itemMedia($data['media'] ?? [], $request, $vendor, null);
 
         foreach ($data['lines'] as $i => $line) {
             $this->ownedVariant($vendor, $line['item_id'], $line['variant_id'], "lines.$i.variant_id");
         }
 
-        $package = DB::transaction(function () use ($data, $vendor) {
+        $package = DB::transaction(function () use ($data, $vendor, $media) {
             $package = Package::create([
-                ...Arr::except($data, 'lines'),
+                ...Arr::except($data, ['lines', 'media']),
                 'vendor_id' => $vendor->id,
                 'currency' => config('eventapp.currency'),
             ]);
@@ -138,11 +157,12 @@ class VendorInventoryController extends Controller
                     'qty' => $line['qty'],
                 ]);
             }
+            $this->media->attach($media, $package);
 
             return $package;
         });
 
-        return new PackageResource($package->load('lines'));
+        return new PackageResource($package->load('lines', 'media'));
     }
 
     /** GET /v1/vendors/{vendor}/calendar?from=&to= — bookings, holds and blocks. */
@@ -245,7 +265,7 @@ class VendorInventoryController extends Controller
      */
     private function itemAttributes(array $data): array
     {
-        $attributes = Arr::except($data, ['variants', 'pricing']);
+        $attributes = Arr::except($data, ['variants', 'pricing', 'media']);
 
         if (isset($data['pricing'])) {
             $attributes['pricing_unit'] = $data['pricing']['unit'];
@@ -256,6 +276,15 @@ class VendorInventoryController extends Controller
         }
 
         return $attributes;
+    }
+
+    /**
+     * @param  list<string>  $ids
+     * @return Collection<int, Media>
+     */
+    private function itemMedia(array $ids, Request $request, Vendor $vendor, ?Item $item): Collection
+    {
+        return $this->media->resolve($ids, $request->user(), $vendor, config('eventapp.media.purposes.item'), 'media', for: $item);
     }
 
     private function ownedItem(Vendor $vendor, string $id): Item
@@ -283,12 +312,9 @@ class VendorInventoryController extends Controller
             'category_id' => [$req, 'string', 'max:40', Rule::exists('categories', 'id')],
             'title' => [$req, 'string', 'max:120'],
             'description' => ['sometimes', 'nullable', 'string', 'max:4000'],
+            // Media ids from POST /v1/uploads, in display order. Must be ready.
             'media' => ['sometimes', 'array', 'max:12'],
-            'media.*.url' => ['required', 'url', 'max:500'],
-            'media.*.type' => ['required', Rule::in(['image', 'video'])],
-            'media.*.w' => ['nullable', 'integer'],
-            'media.*.h' => ['nullable', 'integer'],
-            'media.*.blurhash' => ['nullable', 'string', 'max:100'],
+            'media.*' => ['ulid', 'distinct'],
             'specs' => ['sometimes', 'nullable', 'array'],
             'event_types' => ['sometimes', 'array'],
             'event_types.*' => [Rule::in(['wedding', 'birthday', 'corporate', 'other'])],

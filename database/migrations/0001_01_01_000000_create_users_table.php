@@ -17,7 +17,7 @@ return new class extends Migration
             // Email + password are only needed for the Filament web dashboards.
             $table->string('email')->nullable()->unique();
             $table->string('password')->nullable();
-            $table->string('avatar_url')->nullable();
+            $table->ulid('avatar_media_id')->nullable(); // foreign key added with the media table
             $table->string('bio', 300)->nullable();
             $table->string('city', 80)->nullable();
             $table->decimal('lat', 10, 7)->nullable();

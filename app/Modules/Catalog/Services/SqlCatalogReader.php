@@ -6,7 +6,6 @@ use App\Modules\Catalog\Contracts\CatalogReader;
 use App\Modules\Catalog\Data\VariantSnapshot;
 use App\Modules\Catalog\Models\Item;
 use App\Modules\Catalog\Models\ItemVariant;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 
 class SqlCatalogReader implements CatalogReader
@@ -29,12 +28,12 @@ class SqlCatalogReader implements CatalogReader
             return [];
         }
 
-        return Item::whereIn('id', $ids)->get()->mapWithKeys(fn (Item $item) => [
+        return Item::with('media')->whereIn('id', $ids)->get()->mapWithKeys(fn (Item $item) => [
             $item->id => [
                 'id' => $item->id,
                 'vendor_id' => $item->vendor_id,
                 'title' => $item->title,
-                'image' => Arr::first($item->media ?? []),
+                'image' => $item->media->first()?->toPayload(),
                 'from_price_minor' => $item->unitPriceFor(PHP_INT_MAX),
                 'currency' => $item->currency(),
                 'unit' => $item->pricing_unit,

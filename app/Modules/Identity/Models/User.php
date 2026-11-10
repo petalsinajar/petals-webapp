@@ -3,15 +3,18 @@
 namespace App\Modules\Identity\Models;
 
 use App\Modules\Identity\Enums\VendorRole;
+use App\Modules\Media\Models\Media;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Models\Contracts\HasAvatar;
 use Filament\Models\Contracts\HasName;
 use Filament\Models\Contracts\HasTenants;
 use Filament\Panel;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -26,7 +29,7 @@ class User extends Authenticatable implements FilamentUser, HasAvatar, HasName, 
     use HasApiTokens, HasFactory, HasUlids, Notifiable, SoftDeletes;
 
     protected $fillable = [
-        'handle', 'display_name', 'phone', 'email', 'password', 'avatar_url',
+        'handle', 'display_name', 'phone', 'email', 'password', 'avatar_media_id',
         'bio', 'city', 'lat', 'lng', 'is_private', 'settings',
     ];
 
@@ -59,6 +62,18 @@ class User extends Authenticatable implements FilamentUser, HasAvatar, HasName, 
     protected static function newFactory(): UserFactory
     {
         return UserFactory::new();
+    }
+
+    /** @return BelongsTo<Media, $this> */
+    public function avatar(): BelongsTo
+    {
+        return $this->belongsTo(Media::class, 'avatar_media_id');
+    }
+
+    /** The avatar's thumbnail URL, built from the media when asked. */
+    protected function avatarUrl(): Attribute
+    {
+        return Attribute::get(fn () => $this->avatar?->url('thumb'));
     }
 
     /** @return HasMany<VendorMember, $this> */

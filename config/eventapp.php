@@ -8,11 +8,6 @@ return [
 
     'currency' => env('APP_CURRENCY', 'GHS'),
 
-    // Where POST /v1/uploads stores images. `public` needs `php artisan storage:link`; use `s3` at scale.
-    'uploads' => [
-        'disk' => env('UPLOADS_DISK', 'public'),
-    ],
-
     // Timezone used to bucket rentals into calendar days for availability.
     'business_timezone' => env('BUSINESS_TIMEZONE', 'Africa/Accra'),
 
@@ -83,6 +78,61 @@ return [
             'app_id' => env('ONESIGNAL_APP_ID', '0a3e6f60-5b02-4338-8a89-edc6177108b6'),
             // Secret: OneSignal dashboard → Settings → Keys & IDs.
             'rest_api_key' => env('ONESIGNAL_REST_API_KEY'),
+        ],
+    ],
+
+    // Uploaded images and videos (app/Modules/Media). Files go straight from the app to
+    // storage (R2) or the video provider (Cloudflare Stream); they never pass through here.
+    'media' => [
+        // r2 | fake (tests)
+        'storage' => env('MEDIA_STORAGE', 'r2'),
+        'disk' => 'r2',
+        // Public CDN in front of the (private) bucket, e.g. https://media.petalsinajar.com
+        'cdn_url' => env('MEDIA_CDN_URL'),
+        'queue' => 'media',
+        'uploads_per_minute' => 20,
+        'upload_ttl_minutes' => 10,
+        // Images above this size upload in parts (each part_bytes, except the last).
+        'multipart_threshold_bytes' => 8 * 1024 * 1024,
+        'multipart_part_bytes' => 5 * 1024 * 1024,
+        // Uploads never attached to anything are deleted after this long.
+        'unattached_ttl_hours' => 24,
+
+        'image' => [
+            'mimes' => ['image/jpeg', 'image/png', 'image/heic', 'image/webp'],
+            'max_bytes' => 15 * 1024 * 1024,
+            // Longest edge in pixels, never upscaled. Saved as WebP with all metadata stripped.
+            'sizes' => ['thumb' => 320, 'feed' => 1080, 'full' => 2048],
+            'quality' => 82,
+            // imagick (reads HEIC) | gd
+            'driver' => env('MEDIA_IMAGE_DRIVER', 'imagick'),
+        ],
+        'video' => [
+            'mimes' => ['video/mp4', 'video/quicktime'],
+            'max_bytes' => 200 * 1024 * 1024,
+            'max_duration_seconds' => 180,
+        ],
+
+        // What each upload purpose may contain.
+        'purposes' => [
+            'post' => ['image', 'video'],
+            'item' => ['image', 'video'],
+            'avatar' => ['image'],
+            'cover' => ['image'],
+            'event_cover' => ['image'],
+        ],
+
+        // cloudflare | fake (tests)
+        'video_provider' => env('VIDEO_PROVIDER', 'cloudflare'),
+        'cloudflare_stream' => [
+            'account_id' => env('CLOUDFLARE_ACCOUNT_ID'),
+            'api_token' => env('CLOUDFLARE_STREAM_TOKEN'),
+            // Stream → Settings → Webhooks; also used to sign the fake provider's webhooks.
+            'webhook_secret' => env('CLOUDFLARE_STREAM_WEBHOOK_SECRET'),
+            // https://customer-<code>.cloudflarestream.com (Stream → Settings).
+            'delivery_url' => env('CLOUDFLARE_STREAM_DELIVERY_URL'),
+            // Webhooks older than this are refused (replay protection).
+            'webhook_tolerance_seconds' => 300,
         ],
     ],
 

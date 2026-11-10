@@ -25,7 +25,6 @@ class ItemFactory extends Factory
             'category_id' => 'chairs',
             'title' => 'Chiavari chair',
             'description' => fake()->sentence(),
-            'media' => [],
             'event_types' => ['wedding', 'birthday', 'corporate'],
             'tags' => [],
             'pricing_unit' => 'per_event',

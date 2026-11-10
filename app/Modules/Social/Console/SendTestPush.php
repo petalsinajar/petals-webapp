@@ -33,6 +33,15 @@ class SendTestPush extends Command
 
             return self::FAILURE;
         }
+        $key = trim((string) config('eventapp.push.onesignal.rest_api_key'), " \t\n\r\0\x0B\"'");
+        $this->line('OneSignal app: '.config('eventapp.push.onesignal.app_id'));
+        $this->line(sprintf(
+            'API key: %s…%s (%d characters, %s format, sent as "%s")',
+            substr($key, 0, 10), substr($key, -4), strlen($key),
+            str_starts_with($key, 'os_v2_') ? 'current' : 'legacy',
+            strtok(OneSignalChannel::authorization($key), ' '),
+        ));
+
         if (data_get($user->settings, 'notify.push', true) === false) {
             $this->warn('This user turned push off in the app (Profile settings), so real alerts skip them. Sending the test anyway.');
         }
@@ -46,7 +55,8 @@ class SendTestPush extends Command
         }
         if (! $response->successful()) {
             $this->error("OneSignal refused it ({$response->status()}): ".json_encode($response->json('errors') ?? $response->body()));
-            $this->line('A 401/403 usually means a wrong REST API key or app id.');
+            $this->line('401/403: check the key above is the one in OneSignal → Settings → Keys & IDs for THIS app id, with no quotes or spaces.');
+            $this->line('If you just changed .env: php artisan config:clear (or config:cache), and restart queue workers.');
 
             return self::FAILURE;
         }

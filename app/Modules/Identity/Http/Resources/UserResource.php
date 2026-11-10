@@ -15,7 +15,8 @@ class UserResource extends JsonResource
             'id' => $this->id,
             'handle' => $this->handle,
             'display_name' => $this->display_name,
-            'avatar_url' => $this->avatar_url,
+            'avatar_url' => $this->avatar_url, // the avatar's thumb; `avatar` has every size
+            'avatar' => $this->avatar?->toPayload(),
             'bio' => $this->bio,
             'city' => $this->city,
             'is_private' => $this->is_private,

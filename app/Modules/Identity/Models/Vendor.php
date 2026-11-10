@@ -5,12 +5,15 @@ namespace App\Modules\Identity\Models;
 use App\Modules\Bookings\Models\Booking;
 use App\Modules\Catalog\Models\Item;
 use App\Modules\Catalog\Models\Package;
+use App\Modules\Media\Models\Media;
 use Database\Factories\VendorFactory;
 use Filament\Models\Contracts\HasName;
 use Illuminate\Database\Eloquent\Casts\AsEncryptedArrayObject;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -23,7 +26,7 @@ class Vendor extends Model implements HasName
     use HasFactory, HasUlids, Notifiable, SoftDeletes;
 
     protected $fillable = [
-        'handle', 'name', 'bio', 'logo_url', 'cover_url', 'event_types', 'categories',
+        'handle', 'name', 'bio', 'logo_media_id', 'cover_media_id', 'event_types', 'categories',
         'city', 'base_lat', 'base_lng', 'service_radius_km', 'contact', 'policies',
         'delivery', 'payout',
     ];
@@ -62,6 +65,28 @@ class Vendor extends Model implements HasName
     protected static function newFactory(): VendorFactory
     {
         return VendorFactory::new();
+    }
+
+    /** @return BelongsTo<Media, $this> */
+    public function logo(): BelongsTo
+    {
+        return $this->belongsTo(Media::class, 'logo_media_id');
+    }
+
+    /** @return BelongsTo<Media, $this> */
+    public function cover(): BelongsTo
+    {
+        return $this->belongsTo(Media::class, 'cover_media_id');
+    }
+
+    protected function logoUrl(): Attribute
+    {
+        return Attribute::get(fn () => $this->logo?->url('thumb'));
+    }
+
+    protected function coverUrl(): Attribute
+    {
+        return Attribute::get(fn () => $this->cover?->url('feed'));
     }
 
     /** @return HasMany<VendorMember, $this> */

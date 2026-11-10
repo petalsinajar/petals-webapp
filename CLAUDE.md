@@ -13,7 +13,8 @@ Laravel 13 + Filament 5 backend for a social events app with built-in rentals. R
 7. **API shape**: routes in `routes/api.php` under `/v1`; snake_case keys; single objects unwrapped; lists `{ data, next_cursor }` with cursor pagination; validation errors `{ message, errors }`. Booking actions are verbs, not a generic status PATCH.
 8. **IDs**: all ids are ULIDs (categories use a slug), with real foreign keys. Variants are rows in `item_variants`; clients send a variant's `id` back when editing an item's variants, and leave it out for new ones.
 9. **Polymorphic types** use the morph map in `AppServiceProvider` (`user`, `vendor`, `post`, `comment`).
-10. **New models** mirror their column defaults in `$attributes` so freshly created models are complete before a refresh.
+10. **Media** (images, video) is uploaded straight to storage through `POST /v1/uploads` and referenced by id. Never accept file URLs or files in other endpoints: take media ids, check them with `Media\Services\MediaLibrary::resolve()`, then `attach()` and `releaseExcept()`. Store keys, never URLs; responses use `Media::toPayload()`.
+11. **New models** mirror their column defaults in `$attributes` so freshly created models are complete before a refresh.
 
 ## Working
 

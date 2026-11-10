@@ -6,14 +6,19 @@ use App\Http\Controllers\Controller;
 use App\Modules\Identity\Http\Resources\MeResource;
 use App\Modules\Identity\Models\Device;
 use App\Modules\Identity\Services\HandleRegistry;
+use App\Modules\Media\Services\MediaLibrary;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 
 class MeController extends Controller
 {
-    public function __construct(private readonly HandleRegistry $handles) {}
+    public function __construct(
+        private readonly HandleRegistry $handles,
+        private readonly MediaLibrary $media,
+    ) {}
 
     /** GET /v1/me */
     public function show(Request $request): MeResource
@@ -28,7 +33,7 @@ class MeController extends Controller
         $data = $request->validate([
             'display_name' => ['sometimes', 'required', 'string', 'max:80'],
             'handle' => ['sometimes', 'required', 'string', 'max:30'],
-            'avatar_url' => ['sometimes', 'nullable', 'url', 'max:500'],
+            'avatar_media_id' => ['sometimes', 'nullable', 'ulid'], // a ready image from POST /v1/uploads
             'bio' => ['sometimes', 'nullable', 'string', 'max:300'],
             'city' => ['sometimes', 'nullable', 'string', 'max:80'],
             'lat' => ['sometimes', 'nullable', 'numeric', 'between:-90,90'],
@@ -50,9 +55,19 @@ class MeController extends Controller
             $data['settings'] = array_replace_recursive($user->settings ?? [], $data['settings']);
         }
 
-        $user->fill($data)->save();
+        $avatar = array_key_exists('avatar_media_id', $data)
+            ? $this->media->resolveOne($data['avatar_media_id'], $user, null, 'avatar_media_id', for: $user)
+            : false;
 
-        return new MeResource($user->load('vendors'));
+        DB::transaction(function () use ($user, $data, $avatar) {
+            $user->fill(['avatar_media_id' => $avatar === false ? $user->avatar_media_id : $avatar?->id, ...collect($data)->except('avatar_media_id')->all()])->save();
+            if ($avatar !== false) {
+                $this->media->attach([$avatar], $user);
+                $this->media->releaseExcept($user, [$user->avatar_media_id]); // the old avatar goes
+            }
+        });
+
+        return new MeResource($user->unsetRelation('avatar')->load('vendors'));
     }
 
     /**

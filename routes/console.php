@@ -23,6 +23,9 @@ Schedule::command('recommendations:run')
     ->timezone(config('eventapp.business_timezone'))
     ->withoutOverlapping()->onOneServer();
 
+// Uploads nobody used within a day: files and rows.
+Schedule::command('media:prune')->daily()->withoutOverlapping()->onOneServer();
+
 // Housekeeping.
 Schedule::command('sanctum:prune-expired --hours=24')->daily();
 Schedule::command('model:prune', ['--model' => [OtpCode::class]])->daily();

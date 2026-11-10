@@ -60,6 +60,22 @@ return [
             'report' => false,
         ],
 
+        // Cloudflare R2 (S3-compatible) for uploaded media. The bucket is private; files are
+        // read through the public CDN domain in eventapp.media.cdn_url.
+        'r2' => [
+            'driver' => 's3',
+            'key' => env('R2_ACCESS_KEY_ID'),
+            'secret' => env('R2_SECRET_ACCESS_KEY'),
+            'region' => 'auto',
+            'bucket' => env('R2_BUCKET'),
+            // https://<account_id>.r2.cloudflarestorage.com
+            'endpoint' => env('R2_ENDPOINT'),
+            'use_path_style_endpoint' => true,
+            'visibility' => 'private',
+            'throw' => true,
+            'report' => false,
+        ],
+
     ],
 
     /*

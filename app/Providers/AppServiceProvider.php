@@ -8,6 +8,8 @@ use App\Modules\Bookings\Policies\BookingPolicy;
 use App\Modules\Catalog\Availability\AvailabilityStore;
 use App\Modules\Catalog\Availability\SqlAvailabilityStore;
 use App\Modules\Catalog\Contracts\CatalogReader;
+use App\Modules\Catalog\Models\Item;
+use App\Modules\Catalog\Models\Package;
 use App\Modules\Catalog\Services\CapacityWarnings;
 use App\Modules\Catalog\Services\SqlCatalogReader;
 use App\Modules\Events\Models\Event;
@@ -18,10 +20,22 @@ use App\Modules\Identity\Models\Vendor;
 use App\Modules\Identity\Policies\VendorPolicy;
 use App\Modules\Identity\Services\CbMessagingSmsSender;
 use App\Modules\Identity\Services\LogSmsSender;
+use App\Modules\Media\Contracts\ContentModeration;
+use App\Modules\Media\Contracts\MediaStorage;
+use App\Modules\Media\Contracts\VideoProvider;
+use App\Modules\Media\Events\MediaFailed;
+use App\Modules\Media\Events\MediaReady;
+use App\Modules\Media\Moderation\AllowAllModeration;
+use App\Modules\Media\Services\ImageProcessor;
+use App\Modules\Media\Storage\FakeMediaStorage;
+use App\Modules\Media\Storage\R2MediaStorage;
+use App\Modules\Media\Video\CloudflareStreamProvider;
+use App\Modules\Media\Video\FakeVideoProvider;
 use App\Modules\Payments\Contracts\PaymentGateway;
 use App\Modules\Payments\Gateways\FakeGateway;
 use App\Modules\Payments\Gateways\PaystackGateway;
 use App\Modules\Recommendations\Listeners\MarkRecommendationBooked;
+use App\Modules\Social\Listeners\PublishPostWhenMediaIsReady;
 use App\Modules\Social\Models\Comment;
 use App\Modules\Social\Models\Post;
 use App\Support\Push\OneSignalChannel;
@@ -46,6 +60,17 @@ class AppServiceProvider extends ServiceProvider
         // Per request/job: stock warnings from ItemVariant's hook, read by whoever saved it.
         $this->app->scoped(CapacityWarnings::class);
 
+        // Uploads: R2 + Cloudflare Stream; the test suite uses the fakes (phpunit.xml).
+        $this->app->singleton(MediaStorage::class, fn () => config('eventapp.media.storage') === 'fake'
+            ? new FakeMediaStorage((string) config('eventapp.media.cdn_url'))
+            : new R2MediaStorage(config('eventapp.media.disk'), (string) config('eventapp.media.cdn_url')));
+        $this->app->singleton(VideoProvider::class, fn () => config('eventapp.media.video_provider') === 'fake'
+            ? new FakeVideoProvider
+            : CloudflareStreamProvider::fromConfig());
+        $this->app->singleton(ImageProcessor::class, fn () => ImageProcessor::fromConfig());
+        // Swap for a real moderation service when there is one.
+        $this->app->singleton(ContentModeration::class, AllowAllModeration::class);
+
         $this->app->singleton(PaymentGateway::class, fn () => match (config('eventapp.payments.gateway')) {
             'paystack' => new PaystackGateway,
             default => new FakeGateway,
@@ -65,6 +90,9 @@ class AppServiceProvider extends ServiceProvider
             'vendor' => Vendor::class,
             'post' => Post::class,
             'comment' => Comment::class,
+            'event' => Event::class,
+            'item' => Item::class,
+            'package' => Package::class,
         ]);
 
         // Single objects are returned as-is; lists use { data, next_cursor }.
@@ -79,12 +107,13 @@ class AppServiceProvider extends ServiceProvider
 
         // Cross-module reactions. Listeners are queued, so they never slow the request.
         Events::listen(BookingCreated::class, MarkRecommendationBooked::class);
+        Events::listen([MediaReady::class, MediaFailed::class], PublishPostWhenMediaIsReady::class);
 
         // `push` in a notification's via(): the phone, through OneSignal.
         Notification::extend('push', fn ($app) => $app->make(OneSignalChannel::class));
 
         RateLimiter::for('api', fn (Request $request) => Limit::perMinute(120)->by($request->user()?->id ?: $request->ip()));
-        RateLimiter::for('uploads', fn (Request $request) => Limit::perMinute(20)->by($request->user()?->id ?: $request->ip()));
+        RateLimiter::for('uploads', fn (Request $request) => Limit::perMinute(config('eventapp.media.uploads_per_minute'))->by('uploads:'.($request->user()?->id ?: $request->ip())));
         RateLimiter::for('posting', fn (Request $request) => Limit::perMinute(10)->by($request->user()?->id ?: $request->ip()));
         RateLimiter::for('waitlist', fn (Request $request) => Limit::perMinute(config('eventapp.marketing.waitlist_per_minute'))->by('waitlist:'.$request->ip()));
         RateLimiter::for('otp', fn (Request $request) => [

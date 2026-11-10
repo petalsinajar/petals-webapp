@@ -90,7 +90,7 @@ class OneSignalChannel
 
         try {
             return Http::baseUrl($config['url'])
-                ->withHeaders(['Authorization' => 'Key '.$config['rest_api_key']])
+                ->withHeaders(['Authorization' => self::authorization((string) $config['rest_api_key'])])
                 ->acceptJson()
                 ->timeout(10)
                 ->post('notifications', $payload);
@@ -99,5 +99,16 @@ class OneSignalChannel
 
             return null;
         }
+    }
+
+    /**
+     * OneSignal's current keys (`os_v2_app_…`) go as `Key …`; legacy REST API keys as
+     * `Basic …`. Stray spaces or quotes from .env are trimmed off.
+     */
+    public static function authorization(string $key): string
+    {
+        $key = trim($key, " \t\n\r\0\x0B\"'");
+
+        return (str_starts_with($key, 'os_v2_') ? 'Key ' : 'Basic ').$key;
     }
 }

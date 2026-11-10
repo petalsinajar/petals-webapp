@@ -56,7 +56,7 @@ class CatalogController extends Controller
         ]);
         $limit = $data['limit'] ?? 20;
 
-        $query = Item::query()->select('items.*')->with(['variants', 'vendor'])
+        $query = Item::query()->select('items.*')->with(['variants', 'vendor', 'media', 'vendor.logo'])
             ->where('items.status', 'active')
             ->when($data['category'] ?? null, fn ($q, $category) => $q->whereIn('items.category_id', Category::andChildren($category)))
             ->when($data['event_type'] ?? null, fn ($q, $type) => $q->whereJsonContains('items.event_types', $type))
@@ -86,7 +86,7 @@ class CatalogController extends Controller
     /** GET /v1/items/{item} */
     public function show(string $item): ItemResource
     {
-        return new ItemResource($this->findItem($item)->load(['variants', 'vendor']));
+        return new ItemResource($this->findItem($item)->load(['variants', 'vendor', 'media', 'vendor.logo']));
     }
 
     /** GET /v1/items/{item}/availability?variant_id=&from=2026-12-01&to=2026-12-31 */
@@ -120,7 +120,7 @@ class CatalogController extends Controller
     /** GET /v1/vendors/{vendor}/packages and GET /v1/packages/{package} */
     public function vendorPackages(string $vendor): JsonResponse
     {
-        $packages = Package::with('lines')->where('vendor_id', $vendor)->where('status', 'active')->orderBy('price_minor')->get();
+        $packages = Package::with('lines', 'media')->where('vendor_id', $vendor)->where('status', 'active')->orderBy('price_minor')->get();
 
         return response()->json(['data' => PackageResource::collection($packages)->resolve()]);
     }
@@ -138,7 +138,7 @@ class CatalogController extends Controller
             'limit' => ['nullable', 'integer', 'between:1,50'],
         ]);
 
-        $query = Package::query()->select('packages.*')->with(['lines', 'vendor'])
+        $query = Package::query()->select('packages.*')->with(['lines', 'vendor', 'media', 'vendor.logo'])
             ->join('vendors', 'vendors.id', '=', 'packages.vendor_id')
             ->where('packages.status', 'active')->where('vendors.status', 'active')
             ->when($data['event_type'] ?? null, fn ($q, $type) => $q->whereJsonContains('packages.event_types', $type));
@@ -152,7 +152,7 @@ class CatalogController extends Controller
 
     public function package(string $package): PackageResource
     {
-        $model = Str::isUlid($package) ? Package::with(['lines', 'vendor'])->find(strtolower($package)) : null;
+        $model = Str::isUlid($package) ? Package::with(['lines', 'vendor', 'media', 'vendor.logo'])->find(strtolower($package)) : null;
         abort_if(! $model || $model->status !== 'active', 404);
 
         return new PackageResource($model);

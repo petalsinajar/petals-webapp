@@ -65,7 +65,6 @@ class CatalogSeeder extends Seeder
             'category_id' => $category,
             'title' => $title,
             'description' => "{$title} for weddings, birthdays and corporate events.",
-            'media' => [],
             'event_types' => ['wedding', 'birthday', 'corporate'],
             'tags' => [],
             'pricing_unit' => 'per_event',
