@@ -86,6 +86,8 @@ class OneSignalChannel
                 'type' => $type,
                 ...$message->data,
             ], fn ($value) => $value !== null),
+            // Customers get the app's default look.
+            ...($message->forBusiness ? self::businessLook($config) : []),
         ];
 
         try {
@@ -99,6 +101,21 @@ class OneSignalChannel
 
             return null;
         }
+    }
+
+    /**
+     * Android only (iOS always shows the app icon): the logo tinted in the vendor color
+     * as the small icon, and the vendor-colored logo as the large one.
+     *
+     * @param  array<string, mixed>  $config
+     * @return array<string, string>
+     */
+    private static function businessLook(array $config): array
+    {
+        return array_filter([
+            'android_accent_color' => $config['business_accent_color'] ?? null,
+            'large_icon' => $config['business_large_icon'] ?? asset('images/push/business-logo.png'),
+        ]);
     }
 
     /**

@@ -35,6 +35,7 @@ use App\Modules\Payments\Contracts\PaymentGateway;
 use App\Modules\Payments\Gateways\FakeGateway;
 use App\Modules\Payments\Gateways\PaystackGateway;
 use App\Modules\Recommendations\Listeners\MarkRecommendationBooked;
+use App\Modules\Reviews\Models\Review;
 use App\Modules\Social\Listeners\PublishPostWhenMediaIsReady;
 use App\Modules\Social\Models\Comment;
 use App\Modules\Social\Models\Post;
@@ -93,6 +94,7 @@ class AppServiceProvider extends ServiceProvider
             'event' => Event::class,
             'item' => Item::class,
             'package' => Package::class,
+            'review' => Review::class,
         ]);
 
         // Single objects are returned as-is; lists use { data, next_cursor }.

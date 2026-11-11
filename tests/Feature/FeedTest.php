@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Modules\Identity\Enums\VendorRole;
 use App\Modules\Identity\Models\User;
+use App\Modules\Identity\Models\Vendor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -105,5 +107,33 @@ class FeedTest extends TestCase
         $this->signOut();
         $this->getJson("/v1/posts/{$id}/comments")->assertForbidden();
         $this->getJson("/v1/posts/{$id}")->assertForbidden();
+    }
+
+    public function test_only_the_poster_and_the_business_managers_see_they_can_delete(): void
+    {
+        $author = User::factory()->create();
+        $id = $this->publish($author);
+        $this->getJson("/v1/posts/{$id}")->assertJsonPath('can_delete', true);
+
+        $this->signIn();
+        $this->getJson("/v1/posts/{$id}")->assertJsonPath('can_delete', false);
+
+        // A business's post: its managers may delete it, its staff may not.
+        $owner = User::factory()->create();
+        $vendor = Vendor::factory()->ownedBy($owner)->create();
+        $staff = User::factory()->create();
+        $vendor->members()->create(['user_id' => $staff->id, 'role' => VendorRole::Staff, 'status' => 'active']);
+        $vendorPost = $this->publish($owner, ['as_vendor_id' => $vendor->id]);
+
+        $this->signIn($staff);
+        $this->getJson("/v1/posts/{$vendorPost}")->assertJsonPath('can_delete', false);
+        $this->deleteJson("/v1/posts/{$vendorPost}")->assertForbidden();
+
+        $manager = User::factory()->create();
+        $vendor->members()->create(['user_id' => $manager->id, 'role' => VendorRole::Manager, 'status' => 'active']);
+        $this->signIn($manager);
+        $this->getJson("/v1/posts/{$vendorPost}")->assertJsonPath('can_delete', true);
+        $this->deleteJson("/v1/posts/{$vendorPost}")->assertOk();
+        $this->getJson("/v1/posts/{$vendorPost}")->assertNotFound();
     }
 }

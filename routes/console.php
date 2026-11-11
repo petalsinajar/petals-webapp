@@ -23,6 +23,15 @@ Schedule::command('recommendations:run')
     ->timezone(config('eventapp.business_timezone'))
     ->withoutOverlapping()->onOneServer();
 
+// Double-blind reviews past their window are published; reminders to review completed bookings.
+Schedule::command('reviews:sweep')->hourly()->withoutOverlapping()->onOneServer();
+
+// Vendor trust signals (response time, acceptance and cancellation rates).
+Schedule::command('vendors:trust-signals')
+    ->dailyAt(config('eventapp.trust.run_at'))
+    ->timezone(config('eventapp.business_timezone'))
+    ->withoutOverlapping()->onOneServer();
+
 // Uploads nobody used within a day: files and rows.
 Schedule::command('media:prune')->daily()->withoutOverlapping()->onOneServer();
 

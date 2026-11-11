@@ -43,6 +43,7 @@ class MeController extends Controller
             'settings.notify.push' => ['sometimes', 'boolean'],
             'settings.notify.sms' => ['sometimes', 'boolean'],
             'settings.notify.suggestions' => ['sometimes', 'boolean'],
+            'settings.notify.reviews' => ['sometimes', 'boolean'],
         ]);
 
         if (isset($data['handle']) && HandleRegistry::normalize($data['handle']) !== $user->handle) {

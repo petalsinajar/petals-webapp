@@ -18,7 +18,7 @@ return new class extends Migration
             $table->foreignUlid('owner_id')->constrained('users')->cascadeOnDelete();
             $table->foreignUlid('vendor_id')->nullable()->constrained()->nullOnDelete(); // uploaded for a business
             $table->string('kind', 10);    // image | video
-            $table->string('purpose', 20); // post | item | avatar | cover | event_cover
+            $table->string('purpose', 20); // post | item | avatar | cover | event_cover | review
             $table->string('status', 12)->default('pending'); // pending | uploaded | processing | ready | failed | rejected
             $table->string('storage_key')->nullable();        // original upload in R2 (images); removed after processing
             $table->string('multipart_upload_id')->nullable();

@@ -37,6 +37,7 @@ class BookingStatusChanged extends Notification implements HasPushMessage, Shoul
                 ? "/bookings/{$this->booking->id}"
                 : "/vendor/requests?vendor={$this->booking->vendor_id}",
             data: ['booking_id' => $this->booking->id],
+            forBusiness: ! $isCustomer,
         );
     }
 

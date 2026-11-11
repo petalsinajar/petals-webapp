@@ -93,6 +93,7 @@ class CheckoutFlowTest extends TestCase
 
         $booking->refresh();
         $this->assertSame('completed', $booking->status->value);
+        $this->assertTrue($booking->completed_at->equalTo(now()->startOfSecond()), 'the review window counts from here');
         $this->assertSame($booking->vendorEarningMinor(), (int) LedgerEntry::where(['booking_id' => $bookingId, 'type' => 'vendor_earning'])->sum('amount_minor'));
         $this->assertSame(1, $booking->vendor->refresh()->completed_bookings_count);
     }

@@ -38,6 +38,16 @@ class VendorResource extends JsonResource
             ],
             'delivery' => $this->delivery ?? (object) [],
             'rating' => ['avg' => $this->rating_avg, 'count' => $this->rating_count],
+            // Computed nightly (vendors:trust-signals); null until there are enough requests.
+            'trust' => [
+                'response_time_minutes' => $this->response_time_minutes,
+                'acceptance_rate' => $this->acceptance_rate,
+                // Only shown when it's worth knowing.
+                'cancellation_rate' => $this->when(
+                    $this->cancellation_rate !== null && $this->cancellation_rate > config('eventapp.trust.show_cancellation_rate_above'),
+                    fn () => $this->cancellation_rate,
+                ),
+            ],
             'counts' => [
                 'followers' => $this->followers_count,
                 'posts' => $this->posts_count,

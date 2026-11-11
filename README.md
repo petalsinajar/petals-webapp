@@ -21,8 +21,9 @@ app/
     Social/     posts with shop tags, follows, reactions, comments, feeds, notifications
     Recommendations/  vendor suggestions for hosts' upcoming events (daily, queued)
     Media/      direct uploads to R2 / Cloudflare Stream, image renditions, moderation hook, cleanup
+    Reviews/    verified two-way reviews of completed bookings: double-blind, replies, reports
   Filament/
-    Admin/      users, vendor verification, bookings & disputes, post moderation
+    Admin/      users, vendor verification, bookings & disputes, post and review moderation
     Vendor/     inventory with variants, booking schedule with accept/decline/dispatch/return
   Support/      Money (minor units), Actor (user|vendor), PhoneNumber, Paginated, Geo (service areas)
 ```
@@ -69,13 +70,14 @@ pending_vendor → accepted → confirmed → out_for_delivery → delivered →
 | Suggestions | `POST suggestions/{id}/open`, `POST suggestions/{id}/dismiss`, `vendors/{id}/recommendation-stats?days=` |
 | Checkout | `POST checkouts`, `GET checkouts/{id}`, `POST checkouts/{id}/pay`, `POST webhooks/payments` |
 | Uploads | `POST uploads`, `POST uploads/{id}/complete`, `GET media/{id}`, `POST webhooks/video` |
+| Reviews | `POST/GET bookings/{id}/reviews`, `PATCH reviews/{id}`, `POST reviews/{id}/reply`, `POST reviews/{id}/report`, `vendors/{id}/reviews?sort=recent\|highest\|lowest&rating=&with_photos=`, `items/{id}/reviews`, `customers/{id}/vendor-reviews` |
 | Social | `feed/following`, `feed/discover?event_type=`, `posts`, `posts/{id}/reaction`, `posts/{id}/comments`, `posts/{id}/shop-taps`, `follows`, `notifications` |
 
 ## Uploads
 
 Files never pass through this server. The app:
 
-1. `POST /v1/uploads { kind: image|video, mime, bytes, purpose: post|item|avatar|cover|event_cover, vendor_id?, duration_ms? }`. Allowed: JPEG, PNG, HEIC, WebP up to 15 MB; MP4 and MOV up to 200 MB and 3 minutes (`config/eventapp.php` → `media`). Rate limited per user.
+1. `POST /v1/uploads { kind: image|video, mime, bytes, purpose: post|item|avatar|cover|event_cover|review, vendor_id?, duration_ms? }`. Allowed: JPEG, PNG, HEIC, WebP up to 15 MB; MP4 and MOV up to 200 MB and 3 minutes (`config/eventapp.php` → `media`). Rate limited per user.
 2. Uploads the file as the response says, within 10 minutes:
    - `upload.method = PUT`: one request to `upload.url` with exactly `upload.headers` (type and size are signed, so a different file is refused by storage).
    - `upload.method = multipart` (images over 8 MB): PUT each of `upload.parts[].url`, keep each response's `ETag`.
@@ -84,6 +86,19 @@ Files never pass through this server. The app:
 4. Uses the `media_id` right away in a post (it publishes once processing is done), or polls `GET /v1/media/{id}` until `status` is `ready` for anything else.
 
 Processing runs on the `media` queue (`ProcessMedia`, idempotent): images are auto-rotated, stripped of all metadata (EXIF, GPS), saved as WebP at 320 / 1080 / 2048 px with a blurhash, and the original is deleted. Videos are transcoded to HLS by Stream, which calls `POST /v1/webhooks/video` when done (signature checked). Every media passes `ContentModeration` before it's ready (a no-op `AllowAllModeration` until a real service is bound in `AppServiceProvider`). Rows store keys only; URLs are built from `MEDIA_CDN_URL` / `CLOUDFLARE_STREAM_DELIVERY_URL` when responding. Uploads never attached to anything are deleted after 24 hours (`media:prune`, daily), and a post's or item's media is deleted with it.
+
+## Reviews
+
+Only a **completed** booking can be reviewed, for 30 days after completion, once per side: the customer reviews the vendor (`customer_to_vendor`, public) and any member of the vendor's team reviews the customer (`vendor_to_customer`, private). All windows and limits are in `config/eventapp.php` → `reviews`.
+
+- **Double-blind.** A review is `pending` and hidden until the other side has reviewed too, or 14 days have passed; then the booking's reviews are published together. `GET bookings/{id}/reviews` returns `mine`, `can_review`, `review_until` and `other_side: { submitted, review }`; `review` stays null until it's published, and the customer never sees the vendor's review of them.
+- **Edits**: by the author for 48 hours, and only while pending. **Replies**: owners and managers post one public reply per published review (`POST reviews/{id}/reply` again edits it, for 48 hours).
+- **Private customer reviews** (`GET customers/{id}/vendor-reviews`) are shown only to the teams of vendors the customer currently has a `pending_vendor` or `accepted` booking with. They never appear on the customer's profile.
+- **Lists** are published reviews only, 20 per page, with a `summary` (`average`, `count`, `stars`, `aspects`) on the first page. Every review carries `verified_booking: true` and `booking: { event_type, event_date }`.
+- **Ratings**: `vendors.rating_*` and `items.rating_*` (items listed in a review's `item_ids`) are recomputed from published reviews whenever one is published, removed or restored.
+- **Removal** happens only through reports (`POST reviews/{id}/report` with `abuse`, `private_details` or `spam`, into the `reports` queue) and the admin panel, never for being negative. A removed review keeps its reason, note and who removed it, and can be restored.
+- **Scheduled**: `reviews:sweep` (hourly) publishes reviews past the blind window and reminds whoever hasn't reviewed, 1 and 7 days after completion (`settings.notify.reviews: false` turns these off). Notifications: `review_received`, `vendor_replied`, `review_reminder`.
+- **Trust signals**: `vendors:trust-signals` (nightly) caches `response_time_minutes` (median to accept/decline), `acceptance_rate` and `cancellation_rate` (vendor-cancelled, last 12 months) on vendors. `VendorResource` returns them as `trust`, with `cancellation_rate` only above `eventapp.trust.show_cancellation_rate_above`.
 
 ## Local setup
 
@@ -112,7 +127,7 @@ php artisan db:seed        # users, vendors, an event, categories and demo items
 
 php artisan serve          # API on http://localhost:8000/v1
 php artisan queue:work --queue=default,media,recommendations   # or: php artisan horizon
-php artisan schedule:work  # hold sweeper, completions, feed ranking
+php artisan schedule:work  # hold sweeper, completions, feed ranking, reviews, trust signals
 ```
 
 Seeded logins (local only; OTP is always `123456` and no SMS is sent):
@@ -203,4 +218,4 @@ The server stays stateless: data lives in managed services, so a server can be r
 
 ## What's next
 
-The design doc's later phases are not built yet: messaging (Reverb), reviews, idea boards, stories, quotes and invoices for corporate clients, multi-vendor packages in the cart, payout batches, push notifications (FCM) and a real SMS provider. Add each as a new module under `app/Modules`, following the same layout.
+The design doc's later phases are not built yet: messaging (Reverb), idea boards, stories, quotes and invoices for corporate clients, multi-vendor packages in the cart, payout batches, push notifications (FCM) and a real SMS provider. Add each as a new module under `app/Modules`, following the same layout.

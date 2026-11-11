@@ -10,6 +10,8 @@ use App\Modules\Events\Models\Event;
 use App\Modules\Identity\Models\User;
 use App\Modules\Recommendations\Enums\RecommendationReason;
 use App\Modules\Recommendations\Notifications\VendorSuggestions;
+use App\Support\Push\OneSignalChannel;
+use App\Support\Push\PushMessage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -207,5 +209,28 @@ class PushNotificationsTest extends TestCase
             '/vendor/requests?vendor=01JVENDOR00000000000000000',
             $notification->toPush(User::factory()->create())->route,
         );
+    }
+
+    public function test_pushes_to_a_business_use_the_vendor_colors_and_customers_the_default(): void
+    {
+        $customer = User::factory()->create();
+        $manager = User::factory()->create();
+        $booking = $this->booking($customer)->forceFill(['status' => BookingStatus::Confirmed]);
+
+        $this->assertTrue((new BookingRequested($booking))->toPush($manager)->forBusiness);
+        $this->assertTrue((new BookingStatusChanged($booking))->toPush($manager)->forBusiness);
+        $this->assertFalse((new BookingStatusChanged($booking))->toPush($customer)->forBusiness);
+
+        $channel = app(OneSignalChannel::class);
+        $channel->post($manager->id, new PushMessage('New booking request', 'Respond soon', forBusiness: true));
+        $channel->post($customer->id, new PushMessage('Booking confirmed', 'See you there'));
+
+        Http::assertSent(fn (Request $r) => $r['headings'] === ['en' => 'New booking request']
+            && $r['android_accent_color'] === 'FF0E7F73'
+            && $r['large_icon'] === asset('images/push/business-logo.png'));
+        Http::assertSent(fn (Request $r) => $r['headings'] === ['en' => 'Booking confirmed']
+            && ! isset($r['android_accent_color'])
+            && ! isset($r['large_icon']));
+        $this->assertFileExists(public_path('images/push/business-logo.png'));
     }
 }

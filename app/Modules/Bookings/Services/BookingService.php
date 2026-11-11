@@ -161,6 +161,7 @@ class BookingService
     public function complete(Booking $booking, ?User $actor = null, ?string $note = null): Booking
     {
         return $this->transition($booking, BookingStatus::Completed, $actor, $note, function (Booking $b) {
+            $b->completed_at = now()->toImmutable();
             $claim = (int) ($b->condition['damage_claim_minor'] ?? 0);
             $key = "complete:{$b->id}";
 

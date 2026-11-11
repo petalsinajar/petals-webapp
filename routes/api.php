@@ -15,6 +15,7 @@ use App\Modules\Media\Http\Controllers\UploadController;
 use App\Modules\Media\Http\Controllers\VideoWebhookController;
 use App\Modules\Payments\Http\Controllers\PaymentWebhookController;
 use App\Modules\Recommendations\Http\Controllers\SuggestionController;
+use App\Modules\Reviews\Http\Controllers\ReviewController;
 use App\Modules\Social\Http\Controllers\CommentController;
 use App\Modules\Social\Http\Controllers\FeedController;
 use App\Modules\Social\Http\Controllers\FollowController;
@@ -143,6 +144,16 @@ Route::middleware(['auth:sanctum', 'abilities:access', 'active', 'throttle:api']
     Route::post('bookings/{booking}/dispatch', [BookingController::class, 'markDispatched']);
     Route::post('bookings/{booking}/deliver', [BookingController::class, 'deliver']);
     Route::post('bookings/{booking}/return', [BookingController::class, 'markReturned']);
+
+    // Reviews (of completed bookings, both ways)
+    Route::post('bookings/{booking}/reviews', [ReviewController::class, 'store'])->middleware('throttle:posting');
+    Route::get('bookings/{booking}/reviews', [ReviewController::class, 'forBooking']);
+    Route::patch('reviews/{review}', [ReviewController::class, 'update'])->whereUlid('review');
+    Route::post('reviews/{review}/reply', [ReviewController::class, 'reply'])->whereUlid('review');
+    Route::post('reviews/{review}/report', [ReviewController::class, 'report'])->whereUlid('review')->middleware('throttle:posting');
+    Route::get('vendors/{vendor}/reviews', [ReviewController::class, 'forVendor'])->whereUlid('vendor');
+    Route::get('items/{item}/reviews', [ReviewController::class, 'forItem']);
+    Route::get('customers/{user}/vendor-reviews', [ReviewController::class, 'forCustomer'])->whereUlid('user');
 
     // Social
     Route::get('feed/following', [FeedController::class, 'following']);

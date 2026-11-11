@@ -28,7 +28,11 @@ class NewFollower extends Notification implements HasPushMessage, ShouldQueue
         $whom = $this->target->type === Actor::VENDOR ? 'your business' : 'you';
 
         // Profiles aren't in the app yet, so the tap just opens it.
-        return new PushMessage('New follower', "{$name} started following {$whom}.");
+        return new PushMessage(
+            'New follower',
+            "{$name} started following {$whom}.",
+            forBusiness: $this->target->type === Actor::VENDOR,
+        );
     }
 
     /** @return array<string, mixed> */

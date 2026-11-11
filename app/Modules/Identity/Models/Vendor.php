@@ -59,6 +59,9 @@ class Vendor extends Model implements HasName
             'base_lat' => 'float',
             'base_lng' => 'float',
             'rating_avg' => 'float',
+            'acceptance_rate' => 'float',
+            'cancellation_rate' => 'float',
+            'trust_computed_at' => 'datetime',
         ];
     }
 

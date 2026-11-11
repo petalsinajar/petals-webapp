@@ -78,6 +78,10 @@ return [
             'app_id' => env('ONESIGNAL_APP_ID', '0a3e6f60-5b02-4338-8a89-edc6177108b6'),
             // Secret: OneSignal dashboard → Settings → Keys & IDs.
             'rest_api_key' => env('ONESIGNAL_REST_API_KEY'),
+            // Pushes to a vendor's team (Android): the app's vendor teal, as ARGB hex, and the
+            // logo in vendor colors. Null large icon: public/images/push/business-logo.png.
+            'business_accent_color' => env('ONESIGNAL_BUSINESS_ACCENT', 'FF0E7F73'),
+            'business_large_icon' => env('ONESIGNAL_BUSINESS_LARGE_ICON'),
         ],
     ],
 
@@ -120,6 +124,7 @@ return [
             'avatar' => ['image'],
             'cover' => ['image'],
             'event_cover' => ['image'],
+            'review' => ['image'],
         ],
 
         // cloudflare | fake (tests)
@@ -183,6 +188,47 @@ return [
             'chairs' => 'chair', 'tables' => 'table', 'tents' => 'tent', 'decor' => 'decor',
             'lighting' => 'lighting', 'sound' => 'sound', 'kids' => 'kids’ party', 'staging' => 'staging',
         ],
+    ],
+
+    // Verified, two-way reviews (app/Modules/Reviews). Only a completed booking can be
+    // reviewed: by its customer (of the vendor) and by the vendor's team (of the customer).
+    'reviews' => [
+        // How long after completion either side may review.
+        'window_days' => 30,
+        // Double-blind: a review stays hidden until both sides have reviewed, or this long
+        // after the first one. Then both are published together.
+        'blind_days' => 14,
+        // The author may edit for this long after submitting, while it isn't published yet.
+        'edit_hours' => 48,
+        // The vendor's public reply stays editable for this long after it's first posted.
+        'reply_edit_hours' => 48,
+        // Reminders to whoever hasn't reviewed, this many days after completion.
+        'reminder_days' => [1, 7],
+        'body_max' => 2000,
+        'reply_max' => 1000,
+        'max_media' => 6,
+        // Rated 1-5 alongside the overall rating, per direction. All optional.
+        'aspects' => [
+            'customer_to_vendor' => ['quality', 'punctuality', 'setup', 'communication'],
+            'vendor_to_customer' => ['communication', 'care_of_items', 'on_time_return'],
+        ],
+        // Reviews are removed only for breaking content rules, never for being negative.
+        'removal_reasons' => [
+            'abuse' => 'Abuse or harassment',
+            'private_details' => 'Private details',
+            'spam' => 'Spam or not about the booking',
+        ],
+        'queue' => 'default',
+    ],
+
+    // Trust signals on vendor profiles, recomputed nightly (vendors:trust-signals).
+    'trust' => [
+        'run_at' => '02:30',
+        'window_months' => 12,
+        // Below this many requests answered in the window, rates and response time stay null.
+        'min_requests' => 5,
+        // The cancellation rate is only shown on the profile above this share.
+        'show_cancellation_rate_above' => 0.05,
     ],
 
     // Public landing page and pre-launch waitlist.

@@ -41,6 +41,7 @@ class Booking extends Model
             'vendor_respond_by' => 'immutable_datetime',
             'pay_by' => 'immutable_datetime',
             'returned_at' => 'immutable_datetime',
+            'completed_at' => 'immutable_datetime',
             'fulfilment' => 'array',
             'policy_snapshot' => 'array',
             'notes' => 'array',

@@ -32,6 +32,7 @@ class BookingRequested extends Notification implements HasPushMessage, ShouldQue
             // The app switches to this business and opens its Requests tab.
             route: "/vendor/requests?vendor={$this->booking->vendor_id}",
             data: ['booking_id' => $this->booking->id],
+            forBusiness: true,
         );
     }
 

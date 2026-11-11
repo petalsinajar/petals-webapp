@@ -44,7 +44,12 @@ class PostPresenter
                 ->whereIn('reactable_id', $posts->pluck('id'))->pluck('kind', 'reactable_id')
             : collect();
 
-        return $posts->map(fn (Post $post) => $this->present($post, $viewer, $items, $liked))->values()->all();
+        // Businesses whose posts the viewer may delete (owner or manager).
+        $managed = $viewer
+            ? $viewer->vendors()->wherePivotIn('role', ['owner', 'manager'])->pluck('vendors.id')->flip()
+            : collect();
+
+        return $posts->map(fn (Post $post) => $this->present($post, $viewer, $items, $liked, $managed))->values()->all();
     }
 
     public function one(Post $post, ?User $viewer): array
@@ -55,8 +60,9 @@ class PostPresenter
     /**
      * @param  array<string, array<string, mixed>>  $items
      * @param  Collection<string, string>  $liked
+     * @param  Collection<string, int>  $managed
      */
-    private function present(Post $post, ?User $viewer, array $items, Collection $liked): array
+    private function present(Post $post, ?User $viewer, array $items, Collection $liked, Collection $managed): array
     {
         $isAuthorTeam = $viewer && ($post->posted_by === $viewer->id);
 
@@ -99,6 +105,10 @@ class PostPresenter
                 'saves' => $post->saves_count,
             ],
             'my_reaction' => $liked->get($post->id),
+            // Same rule as DELETE /v1/posts/{post}.
+            'can_delete' => $viewer !== null && ($post->posted_by === $viewer->id
+                || ($post->author_type === Actor::VENDOR && $managed->has($post->author_id))
+                || $viewer->is_admin),
             'created_at' => $post->created_at->toIso8601String(),
         ];
     }
