@@ -46,7 +46,9 @@ class BookingStatusChanged extends Notification implements HasPushMessage, Shoul
         $number = $this->booking->number;
 
         return match ($this->booking->status) {
-            BookingStatus::Confirmed => "{$vendor} accepted your booking. It's confirmed.",
+            BookingStatus::Confirmed => $this->booking->source === 'vendor_manual'
+                ? "{$vendor} recorded your booking #{$number}. It's confirmed."
+                : "{$vendor} accepted your booking. It's confirmed.",
             BookingStatus::Accepted => "{$vendor} accepted your booking.",
             BookingStatus::Declined => "{$vendor} can't take booking #{$number}.",
             BookingStatus::Expired => "Booking #{$number} expired: {$vendor} didn't respond in time.",

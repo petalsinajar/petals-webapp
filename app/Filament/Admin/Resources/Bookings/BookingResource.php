@@ -37,7 +37,7 @@ class BookingResource extends Resource
             ->columns([
                 TextColumn::make('number')->searchable(),
                 TextColumn::make('vendor.name')->searchable(),
-                TextColumn::make('customer.display_name')->label('Customer'),
+                TextColumn::make('customer_name')->label('Customer')->state(fn (Booking $record) => $record->customerName()),
                 TextColumn::make('status')->badge()->formatStateUsing(fn (BookingStatus $state) => str($state->value)->replace('_', ' ')->title()),
                 TextColumn::make('total_minor')->label('Total')->formatStateUsing(fn (int $state, Booking $record) => $record->currency.' '.number_format($state / 100, 2))->sortable(),
                 TextColumn::make('paid_minor')->label('Paid')->formatStateUsing(fn (int $state, Booking $record) => $record->currency.' '.number_format($state / 100, 2)),

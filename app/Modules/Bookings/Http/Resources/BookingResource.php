@@ -23,9 +23,13 @@ class BookingResource extends JsonResource
                 'id' => $this->vendor->id, 'handle' => $this->vendor->handle,
                 'name' => $this->vendor->name, 'logo_url' => $this->vendor->logo_url,
             ]),
-            'customer' => $this->whenLoaded('customer', fn () => [
-                'id' => $this->customer->id, 'handle' => $this->customer->handle,
-                'name' => $this->customer->display_name, 'avatar_url' => $this->customer->avatar_url,
+            // Not whenLoaded(): that skips a loaded-but-empty relation, and a recorded booking may
+            // have no app customer, only a name and phone.
+            'customer' => $this->when($this->resource->relationLoaded('customer'), fn () => [
+                'id' => $this->customer?->id, 'handle' => $this->customer?->handle,
+                'name' => $this->resource->customerName(), 'avatar_url' => $this->customer?->avatar_url,
+                // Recorded bookings: the vendor's own contact for the customer.
+                'phone' => $this->when($isVendorSide && $this->source === 'vendor_manual', $this->customer_phone),
             ]),
             'source' => $this->source,
             'status' => $this->status->value,

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Modules\Identity\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class AuthTest extends TestCase
@@ -74,5 +75,24 @@ class AuthTest extends TestCase
         $user->forceFill(['status' => 'suspended'])->save();
 
         $this->getJson('/v1/me')->assertForbidden();
+    }
+
+    public function test_a_phone_account_sets_a_web_dashboard_sign_in(): void
+    {
+        $user = $this->signIn(User::factory()->create(['email' => null, 'password' => null]));
+        $this->getJson('/v1/me')->assertOk()->assertJsonPath('has_dashboard_sign_in', false);
+
+        $this->putJson('/v1/me/dashboard-credentials', ['email' => 'ama@example.com', 'password' => 'short'])
+            ->assertUnprocessable()->assertJsonValidationErrors('password');
+        User::factory()->create(['email' => 'taken@example.com']);
+        $this->putJson('/v1/me/dashboard-credentials', ['email' => 'taken@example.com', 'password' => 'tents4weddings'])
+            ->assertUnprocessable()->assertJsonValidationErrors('email');
+
+        $this->putJson('/v1/me/dashboard-credentials', ['email' => 'ama@example.com', 'password' => 'tents4weddings'])
+            ->assertOk();
+        $this->getJson('/v1/me')->assertOk()
+            ->assertJsonPath('email', 'ama@example.com')
+            ->assertJsonPath('has_dashboard_sign_in', true);
+        $this->assertTrue(Hash::check('tents4weddings', $user->fresh()->password));
     }
 }

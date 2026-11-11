@@ -118,4 +118,22 @@ class Booking extends Model
         return $this->subtotal_minor + $this->delivery_minor + $this->setup_minor
             - $this->discount_minor - $this->commission_minor;
     }
+
+    /** BK-26-004812: year plus a sequence. Uniqueness is enforced by the database index. */
+    public static function nextNumber(): string
+    {
+        $prefix = 'BK-'.now()->format('y').'-';
+
+        do {
+            $number = $prefix.str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        } while (self::where('number', $number)->exists());
+
+        return $number;
+    }
+
+    /** The app user's name, or the name the vendor typed for a booking made outside the app. */
+    public function customerName(): ?string
+    {
+        return $this->customer?->display_name ?? $this->customer_name;
+    }
 }

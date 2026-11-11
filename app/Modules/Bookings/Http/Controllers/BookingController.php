@@ -7,6 +7,7 @@ use App\Modules\Bookings\Enums\BookingStatus;
 use App\Modules\Bookings\Http\Resources\BookingResource;
 use App\Modules\Bookings\Models\Booking;
 use App\Modules\Bookings\Services\BookingService;
+use App\Modules\Bookings\Services\RecordedBookingService;
 use App\Modules\Events\Models\Event;
 use App\Modules\Identity\Models\Vendor;
 use App\Support\Paginated;
@@ -74,6 +75,29 @@ class BookingController extends Controller
             ->cursorPaginate(50);
 
         return Paginated::response($bookings, BookingResource::class);
+    }
+
+    /** POST /v1/vendors/{vendor}/bookings — a booking agreed outside the app (phone, walk-in). */
+    public function record(Request $request, Vendor $vendor, RecordedBookingService $recorder): JsonResponse
+    {
+        Gate::authorize('manage', $vendor);
+        $data = $request->validate([
+            'customer.name' => ['required', 'string', 'max:120'],
+            'customer.phone' => ['required', 'string', 'max:30'],
+            'deliver_at' => ['required', 'date'],
+            'collect_at' => ['required', 'date'],
+            'fulfilment.type' => ['required', Rule::in(['pickup', 'delivery'])],
+            'fulfilment.address' => ['nullable', 'required_if:fulfilment.type,delivery', 'string', 'max:300'],
+            'lines' => ['required', 'array', 'min:1', 'max:50'],
+            'lines.*.item_id' => ['required', 'string'],
+            'lines.*.variant_id' => ['required', 'string'],
+            'lines.*.qty' => ['required', 'integer', 'min:1'],
+            'delivery_minor' => ['nullable', 'integer', 'min:0'],
+            'paid_minor' => ['nullable', 'integer', 'min:0'],
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        return $this->present($recorder->record($vendor, $request->user(), $data))->response()->setStatusCode(201);
     }
 
     public function accept(Request $request, Booking $booking): BookingResource

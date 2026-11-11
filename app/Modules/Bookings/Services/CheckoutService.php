@@ -72,7 +72,7 @@ class CheckoutService
                 $booking->id = $draft['id'];
                 $booking->checkout_id = $checkout->id;
                 $booking->customer_id = $customer->id;
-                $booking->number = $this->nextNumber();
+                $booking->number = Booking::nextNumber();
                 $booking->save();
 
                 foreach ($draft['lines'] as $line) {
@@ -296,17 +296,5 @@ class CheckoutService
         }
 
         return $currencies[0];
-    }
-
-    /** BK-26-004812: year plus a sequence. Uniqueness is enforced by the database index. */
-    private function nextNumber(): string
-    {
-        $prefix = 'BK-'.now()->format('y').'-';
-
-        do {
-            $number = $prefix.str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-        } while (Booking::where('number', $number)->exists());
-
-        return $number;
     }
 }

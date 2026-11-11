@@ -101,6 +101,7 @@ Route::middleware(['auth:sanctum', 'abilities:access', 'active', 'throttle:api']
         Route::delete('blocks/{reservation}', [VendorInventoryController::class, 'unblock']);
 
         Route::get('bookings', [BookingController::class, 'forVendor']);
+        Route::post('bookings', [BookingController::class, 'record']);
         Route::get('recommendation-stats', [SuggestionController::class, 'vendorStats']);
         Route::get('post-tags', [PostTagController::class, 'index']);
         Route::post('post-tags/{tag}', [PostTagController::class, 'update']);

@@ -52,7 +52,7 @@ class BookingResource extends Resource
                         BookingStatus::Disputed => 'danger',
                         default => 'info',
                     }),
-                TextColumn::make('customer.display_name')->label('Customer'),
+                TextColumn::make('customer_name')->label('Customer')->state(fn (Booking $record) => $record->customerName()),
                 TextColumn::make('window_start')->label('Delivery')->dateTime('D j M, H:i')->sortable(),
                 TextColumn::make('window_end')->label('Collection')->dateTime('D j M, H:i'),
                 TextColumn::make('fulfilment.type')->label('Fulfilment')->badge(),

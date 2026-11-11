@@ -13,6 +13,8 @@ class MeResource extends UserResource
             ...parent::toArray($request),
             'phone' => $this->phone,
             'email' => $this->email,
+            // Phone accounts have no password until one is set for the web dashboard.
+            'has_dashboard_sign_in' => filled($this->email) && filled($this->password),
             'settings' => $this->settings ?? (object) [],
             'is_admin' => $this->is_admin,
             'needs_profile' => blank($this->display_name),
