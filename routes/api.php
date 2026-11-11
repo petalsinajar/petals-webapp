@@ -99,6 +99,9 @@ Route::middleware(['auth:sanctum', 'abilities:access', 'active', 'throttle:api']
         Route::get('calendar', [VendorInventoryController::class, 'calendar']);
         Route::post('blocks', [VendorInventoryController::class, 'block']);
         Route::delete('blocks/{reservation}', [VendorInventoryController::class, 'unblock']);
+        Route::get('blackouts', [VendorInventoryController::class, 'blackouts']);
+        Route::post('blackouts', [VendorInventoryController::class, 'blackout']);
+        Route::delete('blackouts/{blackout}', [VendorInventoryController::class, 'unblackout']);
 
         Route::get('bookings', [BookingController::class, 'forVendor']);
         Route::post('bookings', [BookingController::class, 'record']);

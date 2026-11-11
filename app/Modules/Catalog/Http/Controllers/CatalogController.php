@@ -7,6 +7,7 @@ use App\Modules\Catalog\Availability\AvailabilityStore;
 use App\Modules\Catalog\Availability\ReservationWindow;
 use App\Modules\Catalog\Http\Resources\ItemResource;
 use App\Modules\Catalog\Http\Resources\PackageResource;
+use App\Modules\Catalog\Models\Blackout;
 use App\Modules\Catalog\Models\Category;
 use App\Modules\Catalog\Models\Item;
 use App\Modules\Catalog\Models\Package;
@@ -108,12 +109,18 @@ class CatalogController extends Controller
         }
 
         $remaining = $store->remaining($variant->id, $variant->quantity, ReservationWindow::days($from, $to));
+        // The vendor takes no bookings on these days, whatever is in stock.
+        $closed = array_flip(Blackout::blockedDays($model->vendor_id, array_keys($remaining)));
 
         return response()->json([
             'item_id' => $model->id,
             'variant_id' => $variant->id,
             'capacity' => $variant->quantity,
-            'days' => collect($remaining)->map(fn (int $left, string $day) => ['day' => $day, 'available' => $left])->values(),
+            'days' => collect($remaining)->map(fn (int $left, string $day) => [
+                'day' => $day,
+                'available' => isset($closed[$day]) ? 0 : $left,
+                'closed' => isset($closed[$day]),
+            ])->values(),
         ]);
     }
 

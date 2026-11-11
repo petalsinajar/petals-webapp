@@ -8,6 +8,7 @@ use App\Modules\Catalog\Availability\ReservationKind;
 use App\Modules\Catalog\Availability\ReservationRequest;
 use App\Modules\Catalog\Http\Resources\ItemResource;
 use App\Modules\Catalog\Http\Resources\PackageResource;
+use App\Modules\Catalog\Models\Blackout;
 use App\Modules\Catalog\Models\Item;
 use App\Modules\Catalog\Models\ItemVariant;
 use App\Modules\Catalog\Models\Package;
@@ -224,6 +225,54 @@ class VendorInventoryController extends Controller
         $this->store->release($found->id);
 
         return response()->json(['message' => 'Block removed.']);
+    }
+
+    /** GET /v1/vendors/{vendor}/blackouts?from=&to= — days closed to new bookings. */
+    public function blackouts(Request $request, Vendor $vendor): JsonResponse
+    {
+        Gate::authorize('operate', $vendor);
+        $data = $request->validate([
+            'from' => ['required', 'date_format:Y-m-d'],
+            'to' => ['required', 'date_format:Y-m-d', 'after_or_equal:from'],
+        ]);
+
+        $blackouts = Blackout::where('vendor_id', $vendor->id)
+            ->overlapping($data['from'], $data['to'])
+            ->orderBy('starts_on')->get();
+
+        return response()->json(['data' => $blackouts->map->toPayload()->values()]);
+    }
+
+    /** POST /v1/vendors/{vendor}/blackouts — stop new bookings on these days. */
+    public function blackout(Request $request, Vendor $vendor): JsonResponse
+    {
+        Gate::authorize('manage', $vendor);
+        $today = CarbonImmutable::now(config('eventapp.business_timezone'))->toDateString();
+        $data = $request->validate([
+            'starts_on' => ['required', 'date_format:Y-m-d', 'after_or_equal:'.$today],
+            'ends_on' => ['required', 'date_format:Y-m-d', 'after_or_equal:starts_on'],
+            'reason' => ['nullable', 'string', 'max:120'],
+        ], [
+            'starts_on.after_or_equal' => 'Pick today or a later day.',
+            'ends_on.after_or_equal' => 'The last day must be on or after the first.',
+        ]);
+
+        if (CarbonImmutable::parse($data['starts_on'])->diffInDays(CarbonImmutable::parse($data['ends_on'])) > 365) {
+            throw ValidationException::withMessages(['ends_on' => 'Block at most a year at a time.']);
+        }
+
+        $blackout = Blackout::create([...$data, 'vendor_id' => $vendor->id, 'created_by' => $request->user()->id]);
+
+        return response()->json($blackout->toPayload(), 201);
+    }
+
+    /** DELETE /v1/vendors/{vendor}/blackouts/{blackout} */
+    public function unblackout(Vendor $vendor, string $blackout): JsonResponse
+    {
+        Gate::authorize('manage', $vendor);
+        Blackout::where('vendor_id', $vendor->id)->whereKey(strtolower($blackout))->firstOrFail()->delete();
+
+        return response()->json(['message' => 'Dates open again.']);
     }
 
     // ---------------------------------------------------------------------

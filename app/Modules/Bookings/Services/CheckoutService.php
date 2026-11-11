@@ -13,6 +13,7 @@ use App\Modules\Catalog\Availability\ReservationRequest;
 use App\Modules\Catalog\Availability\ReservationWindow;
 use App\Modules\Catalog\Contracts\CatalogReader;
 use App\Modules\Catalog\Data\VariantSnapshot;
+use App\Modules\Catalog\Models\Blackout;
 use App\Modules\Events\Models\Event;
 use App\Modules\Identity\Models\User;
 use App\Modules\Identity\Models\Vendor;
@@ -146,6 +147,12 @@ class CheckoutService
         $bookingId = strtolower((string) Str::ulid());
         $deliverAt = CarbonImmutable::parse($fulfilment['deliver_at']);
         $collectAt = CarbonImmutable::parse($fulfilment['collect_at']);
+
+        $closed = Blackout::blockedDays($vendor->id, ReservationWindow::days($deliverAt, $collectAt));
+        if ($closed !== []) {
+            $first = CarbonImmutable::parse($closed[0])->format('j M');
+            throw ValidationException::withMessages(["fulfilment.{$vendor->id}.deliver_at" => "{$vendor->name} isn't taking bookings on {$first}. Try other dates."]);
+        }
 
         $leadHours = (int) $vendor->policy('lead_time_hours');
         if ($deliverAt->lessThan(now()->addHours($leadHours))) {
