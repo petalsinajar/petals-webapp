@@ -17,7 +17,7 @@ class PanelsTest extends TestCase
         $this->get('/admin/login')->assertOk();
         $this->actingAs(User::factory()->admin()->create());
 
-        foreach (['/admin', '/admin/users', '/admin/vendors', '/admin/bookings', '/admin/posts', '/admin/reviews', '/admin/event-types', '/admin/plans', '/admin/subscriptions'] as $url) {
+        foreach (['/admin', '/admin/users', '/admin/vendors', '/admin/bookings', '/admin/posts', '/admin/reviews', '/admin/event-types', '/admin/plans', '/admin/subscriptions', '/admin/support-requests'] as $url) {
             $this->get($url)->assertOk();
         }
     }

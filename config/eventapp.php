@@ -293,6 +293,10 @@ return [
             'staging' => 'Staging',
         ],
         'contact_email' => 'hello@petalsinajar.com',
+        // Support page (/support): where requests are emailed, and the deletion promise shown there.
+        'support_email' => env('SUPPORT_EMAIL', 'hello@petalsinajar.com'),
+        'support_per_minute' => 3,
+        'deletion_days' => 30,
         'instagram_handle' => 'petalsinajar',
         'socials' => [
             'Instagram' => 'https://instagram.com/petalsinajar',

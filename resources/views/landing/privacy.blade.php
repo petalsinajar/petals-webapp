@@ -13,6 +13,7 @@
             <p>To be removed from the list, or to see what we hold about you, email
                 <a href="mailto:{{ $marketing['contact_email'] }}" class="font-semibold text-ink underline">{{ $marketing['contact_email'] }}</a>.
             </p>
+            <p>Have an account and want it deleted? See <a href="{{ route('support') }}#delete-account" class="font-semibold text-ink underline">deleting your account</a>.</p>
         </div>
     </main>
 </x-landing.layout>

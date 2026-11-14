@@ -33,6 +33,7 @@
             <h3 class="text-sm font-bold tracking-[0.14em] text-ink-soft uppercase">Contact</h3>
             <ul class="mt-4 space-y-2">
                 <li><a href="mailto:{{ $marketing['contact_email'] }}" class="font-semibold hover:underline">{{ $marketing['contact_email'] }}</a></li>
+                <li><a href="{{ route('support') }}" class="font-semibold hover:underline">Support</a></li>
                 <li><a href="{{ route('privacy') }}" class="font-semibold hover:underline">Privacy</a></li>
             </ul>
         </div>
