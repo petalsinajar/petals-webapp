@@ -17,6 +17,10 @@ return [
         'otp_max_attempts' => 5,
         // In local/testing the OTP is always this code and no SMS is sent.
         'otp_dev_code' => env('OTP_DEV_CODE', '123456'),
+        // App store review: this one phone always signs in with this code, and no SMS is
+        // sent (reviewers can't receive one). Both empty (the default) turns it off.
+        'review_phone' => env('REVIEW_LOGIN_PHONE'),
+        'review_code' => env('REVIEW_LOGIN_CODE'),
         'access_token_minutes' => (int) env('ACCESS_TOKEN_MINUTES', 60),
         'refresh_token_days' => (int) env('REFRESH_TOKEN_DAYS', 60),
     ],

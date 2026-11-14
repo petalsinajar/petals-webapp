@@ -47,4 +47,38 @@ class OtpSmsTest extends TestCase
             ->assertStatus(503)
             ->assertJson(['message' => "We couldn't send the text message. Please try again in a moment."]);
     }
+
+    public function test_the_store_review_phone_signs_in_with_its_code_and_no_sms(): void
+    {
+        config(['eventapp.auth.review_phone' => '0544874686', 'eventapp.auth.review_code' => '443944']);
+        Http::fake();
+
+        $this->postJson('/v1/auth/otp', ['phone' => '054 487 4686'])->assertOk();
+        Http::assertNothingSent();
+
+        $this->postJson('/v1/auth/verify', ['phone' => '0544874686', 'code' => '000000', 'device_name' => 'Pixel 8'])
+            ->assertUnprocessable()->assertJsonValidationErrors('code');
+        $this->postJson('/v1/auth/verify', ['phone' => '+233544874686', 'code' => '443944', 'device_name' => 'Pixel 8'])
+            ->assertOk()->assertJsonStructure(['access_token']);
+    }
+
+    public function test_other_phones_still_get_a_real_texted_code(): void
+    {
+        config(['eventapp.auth.review_phone' => '0544874686', 'eventapp.auth.review_code' => '443944']);
+        Http::fake(['cbmessaging.test/*' => Http::response(['status' => 'ok'])]);
+
+        $this->postJson('/v1/auth/otp', ['phone' => '0241234567'])->assertOk();
+        Http::assertSentCount(1);
+        $this->postJson('/v1/auth/verify', ['phone' => '0241234567', 'code' => '443944', 'device_name' => 'Pixel 8'])
+            ->assertUnprocessable();
+    }
+
+    public function test_without_settings_the_review_login_is_off(): void
+    {
+        config(['eventapp.auth.review_phone' => '0544874686', 'eventapp.auth.review_code' => null]);
+        Http::fake(['cbmessaging.test/*' => Http::response(['status' => 'ok'])]);
+
+        $this->postJson('/v1/auth/otp', ['phone' => '0544874686'])->assertOk();
+        Http::assertSentCount(1);
+    }
 }

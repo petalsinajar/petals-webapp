@@ -4,6 +4,7 @@ namespace App\Modules\Identity\Services;
 
 use App\Modules\Identity\Contracts\SmsSender;
 use App\Modules\Identity\Models\OtpCode;
+use App\Support\PhoneNumber;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
@@ -14,9 +15,12 @@ class OtpService
     public function send(string $phone): void
     {
         $length = config('eventapp.auth.otp_length');
-        $code = $this->usesDevCode()
-            ? config('eventapp.auth.otp_dev_code')
-            : str_pad((string) random_int(0, 10 ** $length - 1), $length, '0', STR_PAD_LEFT);
+        $review = $this->isReviewPhone($phone);
+        $code = match (true) {
+            $review => (string) config('eventapp.auth.review_code'),
+            $this->usesDevCode() => config('eventapp.auth.otp_dev_code'),
+            default => str_pad((string) random_int(0, 10 ** $length - 1), $length, '0', STR_PAD_LEFT),
+        };
 
         // Only the newest code for a phone is valid.
         OtpCode::where('phone', $phone)->whereNull('consumed_at')->update(['consumed_at' => now()]);
@@ -27,7 +31,7 @@ class OtpService
             'expires_at' => now()->addMinutes(config('eventapp.auth.otp_ttl_minutes')),
         ]);
 
-        if (! $this->usesDevCode()) {
+        if (! $review && ! $this->usesDevCode()) {
             $this->sms->send($phone, "Your Petalsinajar code is {$code}. It expires in ".config('eventapp.auth.otp_ttl_minutes').' minutes.');
         }
     }
@@ -51,6 +55,16 @@ class OtpService
         }
 
         $otp->forceFill(['consumed_at' => now()])->save();
+    }
+
+    /** The app store review account: a fixed code, no SMS. Off unless both are set. */
+    private function isReviewPhone(string $phone): bool
+    {
+        $reviewPhone = config('eventapp.auth.review_phone');
+        $reviewCode = config('eventapp.auth.review_code');
+
+        return filled($reviewPhone) && filled($reviewCode)
+            && PhoneNumber::normalize((string) $reviewPhone) === $phone;
     }
 
     private function usesDevCode(): bool
