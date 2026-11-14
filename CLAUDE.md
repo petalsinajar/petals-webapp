@@ -16,6 +16,7 @@ Laravel 13 + Filament 5 backend for a social events app with built-in rentals. R
 10. **Media** (images, video) is uploaded straight to storage through `POST /v1/uploads` and referenced by id. Never accept file URLs or files in other endpoints: take media ids, check them with `Media\Services\MediaLibrary::resolve()`, then `attach()` and `releaseExcept()`. Store keys, never URLs; responses use `Media::toPayload()`.
 11. **New models** mirror their column defaults in `$attributes` so freshly created models are complete before a refresh.
 12. **Reviews** change status only through `Reviews\Services\ReviewService` (submit, publish) and `ReviewModeration` (remove, restore). `vendors.rating_*` / `items.rating_*` are recomputed by `RatingAggregator`, never incremented. Vendor → customer reviews are private: never return them outside `customers/{id}/vendor-reviews`.
+13. **Plans**: check limits and features through `Subscriptions\Services\Entitlements` (`ensureRoomFor`, `ensureFeature`), never by plan key. Plan values live in the `plans` table, not code. Limits only block adding; never delete, hide or unpublish anything because of a plan. Verification, reviews, ratings and deposit protection never depend on the plan. Subscription state changes only through `SubscriptionService`.
 
 ## Working
 

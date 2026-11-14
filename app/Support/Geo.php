@@ -59,20 +59,24 @@ final class Geo
     }
 
     /**
-     * Nearest vendor first.
+     * Nearest vendor first. With $planBoost, a paid plan's visibility_boost (at most
+     * eventapp.visibility.max_boost, e.g. 0.1) counts the vendor as that much closer: a
+     * nudge between similar distances, never past a clearly nearer vendor.
      *
      * @template T of Builder
      *
      * @param  T  $query
      * @return T
      */
-    public static function orderByDistance(Builder $query, float $lat, float $lng): Builder
+    public static function orderByDistance(Builder $query, float $lat, float $lng, bool $planBoost = true): Builder
     {
+        $boost = $planBoost ? ' * (1 - vendors.visibility_boost)' : '';
+
         if (self::postgis($query)) {
-            return $query->orderByRaw('vendors.base_location <-> ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography', [$lng, $lat]);
+            return $query->orderByRaw('(vendors.base_location <-> ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography)'.$boost, [$lng, $lat]);
         }
 
-        return $query->orderByRaw(self::haversineSql(), [$lat, $lat, $lng]);
+        return $query->orderByRaw(self::haversineSql().$boost, [$lat, $lat, $lng]);
     }
 
     /** Distance in km from vendors.base_lat/base_lng; bindings: lat, lat, lng. */

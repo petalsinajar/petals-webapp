@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Events\Http\Resources\EventResource;
 use App\Modules\Events\Models\Event;
 use App\Modules\Events\Models\EventMember;
+use App\Modules\Events\Models\EventType;
 use App\Modules\Identity\Http\Resources\UserResource;
 use App\Modules\Identity\Models\User;
 use App\Modules\Media\Services\MediaLibrary;
@@ -210,7 +211,7 @@ class EventController extends Controller
         $req = $partial ? 'sometimes' : 'required';
 
         return [
-            'type' => [$req, Rule::in(Event::TYPES)],
+            'type' => [$req, EventType::activeRule()],
             'title' => [$req, 'string', 'max:140'],
             'description' => ['sometimes', 'nullable', 'string', 'max:5000'],
             'cover_media_id' => ['sometimes', 'nullable', 'ulid'], // a ready image from POST /v1/uploads

@@ -44,6 +44,8 @@ class Vendor extends Model implements HasName
         'followers_count' => 0,
         'posts_count' => 0,
         'completed_bookings_count' => 0,
+        'plan_key' => 'starter',
+        'visibility_boost' => 0,
     ];
 
     protected function casts(): array
@@ -62,6 +64,7 @@ class Vendor extends Model implements HasName
             'acceptance_rate' => 'float',
             'cancellation_rate' => 'float',
             'trust_computed_at' => 'datetime',
+            'visibility_boost' => 'float',
         ];
     }
 

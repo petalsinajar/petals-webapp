@@ -32,6 +32,9 @@ Schedule::command('vendors:trust-signals')
     ->timezone(config('eventapp.business_timezone'))
     ->withoutOverlapping()->onOneServer();
 
+// Vendor plans: card renewals, reminders, grace and downgrades, monthly featured weeks.
+Schedule::command('subscriptions:sweep')->hourly()->withoutOverlapping()->onOneServer();
+
 // Uploads nobody used within a day: files and rows.
 Schedule::command('media:prune')->daily()->withoutOverlapping()->onOneServer();
 

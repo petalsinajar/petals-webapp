@@ -22,6 +22,7 @@ app/
     Recommendations/  vendor suggestions for hosts' upcoming events (daily, queued)
     Media/      direct uploads to R2 / Cloudflare Stream, image renditions, moderation hook, cleanup
     Reviews/    verified two-way reviews of completed bookings: double-blind, replies, reports
+    Subscriptions/  vendor plans: limits, features, trial, billing (Paystack), featured weeks, analytics
   Filament/
     Admin/      users, vendor verification, bookings & disputes, post and review moderation
     Vendor/     inventory with variants, booking schedule with accept/decline/dispatch/return
@@ -70,6 +71,7 @@ pending_vendor → accepted → confirmed → out_for_delivery → delivered →
 | Suggestions | `POST suggestions/{id}/open`, `POST suggestions/{id}/dismiss`, `vendors/{id}/recommendation-stats?days=` |
 | Checkout | `POST checkouts`, `GET checkouts/{id}`, `POST checkouts/{id}/pay`, `POST webhooks/payments` |
 | Uploads | `POST uploads`, `POST uploads/{id}/complete`, `GET media/{id}`, `POST webhooks/video` |
+| Plans | `plans`, `vendors/{id}/subscription` (+ `/trial`, `/checkout`, `/cancel`, `/resume`, `/auto-renew`), `vendors/{id}/featured-credits/{credit}/use`, `vendors/{id}/analytics?days=` |
 | Reviews | `POST/GET bookings/{id}/reviews`, `PATCH reviews/{id}`, `POST reviews/{id}/reply`, `POST reviews/{id}/report`, `vendors/{id}/reviews?sort=recent\|highest\|lowest&rating=&with_photos=`, `items/{id}/reviews`, `customers/{id}/vendor-reviews` |
 | Social | `feed/following`, `feed/discover?event_type=`, `posts`, `posts/{id}/reaction`, `posts/{id}/comments`, `posts/{id}/shop-taps`, `follows`, `notifications` |
 
@@ -100,6 +102,18 @@ Only a **completed** booking can be reviewed, for 30 days after completion, once
 - **Scheduled**: `reviews:sweep` (hourly) publishes reviews past the blind window and reminds whoever hasn't reviewed, 1 and 7 days after completion (`settings.notify.reviews: false` turns these off). Notifications: `review_received`, `vendor_replied`, `review_reminder`.
 - **Trust signals**: `vendors:trust-signals` (nightly) caches `response_time_minutes` (median to accept/decline), `acceptance_rate` and `cancellation_rate` (vendor-cancelled, last 12 months) on vendors. `VendorResource` returns them as `trust`, with `cancellation_rate` only above `eventapp.trust.show_cancellation_rate_above`.
 
+## Vendor plans
+
+Plans (`starter`, `growth`, `pro`, `business`) are rows in `plans`, inserted by the migration and edited in `/admin/plans`: prices in minor units (yearly = 10 × monthly), `limits` (`items`, `packages`, `team`; null = unlimited), `features` (analytics level, web dashboard, …), `commission_percent`, `visibility_level` and `featured_weeks_per_month`. A vendor without a current subscription is on Starter. Rules that aren't per plan (trial length, grace, reminders, boosts) are in `config/eventapp.php` → `subscriptions`, `visibility`, `analytics`.
+
+- **Entitlements** (`Subscriptions\Services\Entitlements`) answer `canAddItem` / `canAddPackage` / `canAddMember` / `hasFeature`, limits and usage. Adding past a limit returns **403** `{ code: "plan_limit", resource, limit, used, upgrade_to }`. Going over a limit (after a downgrade) never deletes or hides anything: existing items, packages, members, bookings, reviews and posts stay as they are; only adding more is blocked. Verification, reviews, ratings and deposit protection never depend on the plan. The vendor web dashboard needs the `web_dashboard` feature (Growth and up).
+- **Trial**: one 30-day Pro trial per vendor, no payment. **Upgrades** apply once paid and cost the new price minus the unused days of the current period (prorated by whole days, rounded to minor units). **Downgrades and cancellations** take effect at the period end (`scheduled_change`, `cancel_at_period_end`; `resume` undoes them). Only owners change plans or pay; managers can see the plan, usage and analytics.
+- **Payments** go through `PaymentService::startStandalone` (purpose `subscription`, no checkout) and Paystack's hosted page; the payment webhook marks it paid and `PaymentSucceeded` activates or extends the period in the same transaction, once (ledger type `subscription`). Cards are saved (reusable authorization) and renewed automatically a few hours before the period ends; mobile money is prepaid, so owners get reminders 3 and 1 days before with a pay link. Unpaid at the end: **grace** for 3 days (benefits continue, `banner` in the subscription response), then Starter.
+- **Commission**: each booking snapshots its vendor's plan `commission_percent` at checkout.
+- **Visibility**: a paid plan's `visibility_boost` (≤ 0.1, cached on `vendors`) counts the vendor up to 10% closer in nearby search, lifts Discover scores by up to 10% and adds a small `plan` component (weight 0.05) to suggestions, so a clearly better match still wins. **Featured weeks** (granted monthly for paid Pro/Business) are spent on a week starting Monday; while it runs the vendor may appear in `sponsored` (labelled, separate from the results) in `GET vendors?lat=&lng=&event_type=&date=` and `GET events/{id}/needs`, only when it matches the event type, area and date.
+- **Analytics** returns only the metrics of the plan's level (`basic` → `standard` → `full` → `full_plus`), plus `locked` for an upgrade prompt.
+- **Scheduled**: `subscriptions:sweep` (hourly) charges cards, sends reminders, starts grace, drops to Starter, applies scheduled downgrades and grants featured weeks. **Admin**: `/admin/subscriptions` (filters, extend with a reason, comp a plan, MRR / vendors by plan / churn this month).
+
 ## Local setup
 
 Requirements: PHP 8.3+ with the `pdo_pgsql`, `intl` and `redis` extensions; Composer; PostgreSQL 15+ with **PostGIS 3**; Redis.
@@ -127,7 +141,7 @@ php artisan db:seed        # users, vendors, an event, categories and demo items
 
 php artisan serve          # API on http://localhost:8000/v1
 php artisan queue:work --queue=default,media,recommendations   # or: php artisan horizon
-php artisan schedule:work  # hold sweeper, completions, feed ranking, reviews, trust signals
+php artisan schedule:work  # hold sweeper, completions, feed ranking, reviews, trust signals, plans
 ```
 
 Seeded logins (local only; OTP is always `123456` and no SMS is sent):

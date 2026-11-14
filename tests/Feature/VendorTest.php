@@ -36,7 +36,7 @@ class VendorTest extends TestCase
     public function test_staff_can_operate_but_not_manage(): void
     {
         $owner = User::factory()->create();
-        $vendor = Vendor::factory()->ownedBy($owner)->create();
+        $vendor = Vendor::factory()->ownedBy($owner)->onPlan('growth')->create(); // room for a second member
         $staff = User::factory()->create(['phone' => '+233209999999']);
 
         $this->signIn($owner);

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Recommendations\Services;
 
+use App\Modules\Events\Models\EventType;
 use App\Modules\Recommendations\Enums\RecommendationReason;
 use Carbon\CarbonImmutable;
 
@@ -16,7 +17,14 @@ final class RecommendationRules
 
     public static function fromConfig(): self
     {
-        return new self(config('eventapp.recommendations'));
+        $config = config('eventapp.recommendations');
+        // Set per event type in the admin panel; config is the fallback.
+        $config['required_categories'] = [
+            ...$config['required_categories'],
+            ...EventType::requiredCategories(),
+        ];
+
+        return new self($config);
     }
 
     public function config(string $key, mixed $default = null): mixed
@@ -119,6 +127,14 @@ final class RecommendationRules
     public function fairnessScore(int $recentRecommendations): float
     {
         return $this->clamp(1 - $recentRecommendations / max(1, $this->config('fairness_cap')));
+    }
+
+    /** A paid plan's visibility boost, as a share of the largest boost there is. */
+    public function planScore(float $boost): float
+    {
+        $max = (float) config('eventapp.visibility.max_boost');
+
+        return $max > 0 ? $this->clamp($boost / $max) : 0.0;
     }
 
     /** @param  array<string, float>  $components  keyed like the weights config */

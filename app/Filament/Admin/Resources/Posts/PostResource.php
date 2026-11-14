@@ -3,6 +3,7 @@
 namespace App\Filament\Admin\Resources\Posts;
 
 use App\Filament\Admin\Resources\Posts\Pages\ManagePosts;
+use App\Modules\Events\Models\EventType;
 use App\Modules\Social\Models\Post;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -41,7 +42,7 @@ class PostResource extends Resource
             ->defaultSort('created_at', 'desc')
             ->filters([
                 SelectFilter::make('status')->options(['published' => 'Published', 'hidden' => 'Hidden', 'removed' => 'Removed']),
-                SelectFilter::make('event_type')->options(['wedding' => 'Wedding', 'birthday' => 'Birthday', 'corporate' => 'Corporate', 'other' => 'Other']),
+                SelectFilter::make('event_type')->options(fn () => EventType::options()),
             ])
             ->recordActions([
                 Action::make('hide')

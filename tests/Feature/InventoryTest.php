@@ -24,7 +24,8 @@ class InventoryTest extends TestCase
     {
         parent::setUp();
         $this->owner = User::factory()->create();
-        $this->vendor = Vendor::factory()->ownedBy($this->owner)->create();
+        // Growth: room for several packages; plan limits have their own tests.
+        $this->vendor = Vendor::factory()->ownedBy($this->owner)->onPlan('growth')->create();
         Category::create(['id' => 'chairs', 'name' => 'Chairs']);
         Category::create(['id' => 'sound', 'name' => 'Sound']);
     }

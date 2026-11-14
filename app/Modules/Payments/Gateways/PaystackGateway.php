@@ -32,7 +32,7 @@ class PaystackGateway implements PaymentGateway
             'reference' => $payment->provider_ref,
             'callback_url' => config('eventapp.payments.paystack.callback_url'),
             'channels' => ['mobile_money', 'card'],
-            'metadata' => ['payment_id' => $payment->id, 'checkout_id' => $payment->checkout_id],
+            'metadata' => ['payment_id' => $payment->id, 'checkout_id' => $payment->checkout_id, 'purpose' => $payment->purpose],
         ]));
 
         if (! $response->successful() || ! $response->json('status')) {
@@ -42,6 +42,30 @@ class PaystackGateway implements PaymentGateway
         return [
             'authorization_url' => $response->json('data.authorization_url'),
             'reference' => $response->json('data.reference', $payment->provider_ref),
+        ];
+    }
+
+    public function chargeAuthorization(Payment $payment, User $payer, string $authorizationCode): array
+    {
+        $response = $this->client()->post('/transaction/charge_authorization', [
+            'authorization_code' => $authorizationCode,
+            'email' => $payer->email ?: $payer->id.'@customers.eventapp.invalid',
+            'amount' => $payment->amount_minor,
+            'currency' => $payment->currency,
+            'reference' => $payment->provider_ref,
+            'metadata' => ['payment_id' => $payment->id, 'purpose' => $payment->purpose],
+        ]);
+
+        $status = $response->json('data.status');
+
+        return [
+            'reference' => $response->json('data.reference', $payment->provider_ref),
+            'status' => match (true) {
+                ! $response->successful() => 'failed',
+                $status === 'success' => 'success',
+                in_array($status, ['failed', 'reversed', 'abandoned'], true) => 'failed',
+                default => 'pending', // the webhook decides
+            },
         ];
     }
 
@@ -64,6 +88,11 @@ class PaystackGateway implements PaymentGateway
             method: $data['channel'] ?? null,
             raw: $request->all(),
             relevant: in_array($event, ['charge.success', 'charge.failed'], true),
+            authorization: isset($data['authorization']['authorization_code']) ? [
+                'code' => $data['authorization']['authorization_code'],
+                'reusable' => (bool) ($data['authorization']['reusable'] ?? false),
+                'last4' => $data['authorization']['last4'] ?? null,
+            ] : null,
         );
     }
 

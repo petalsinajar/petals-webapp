@@ -5,6 +5,9 @@ namespace Database\Factories;
 use App\Modules\Identity\Enums\VendorRole;
 use App\Modules\Identity\Models\User;
 use App\Modules\Identity\Models\Vendor;
+use App\Modules\Subscriptions\Models\Plan;
+use App\Modules\Subscriptions\Models\VendorSubscription;
+use App\Modules\Subscriptions\Services\SubscriptionService;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -50,6 +53,22 @@ class VendorFactory extends Factory
                 'handle' => $vendor->handle, 'owner_type' => 'vendor', 'owner_id' => $vendor->id,
                 'created_at' => now(), 'updated_at' => now(),
             ]);
+        });
+    }
+
+    /** On a paid plan for the next month (no payment), like a comp from the admin panel. */
+    public function onPlan(string $planKey, string $interval = 'month'): static
+    {
+        return $this->afterCreating(function (Vendor $vendor) use ($planKey, $interval) {
+            VendorSubscription::create([
+                'vendor_id' => $vendor->id,
+                'plan_id' => Plan::byKey($planKey)->id,
+                'interval' => $interval,
+                'status' => 'active',
+                'current_period_start' => now(),
+                'current_period_end' => $interval === 'year' ? now()->addYear() : now()->addMonth(),
+            ]);
+            app(SubscriptionService::class)->syncVendor($vendor->id);
         });
     }
 

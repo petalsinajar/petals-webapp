@@ -15,5 +15,7 @@ final class WebhookResult
         public readonly array $raw = [],
         /** Events we don't act on (e.g. transfer updates) are acknowledged and ignored. */
         public readonly bool $relevant = true,
+        /** A reusable card authorization, when the provider returns one: { code, reusable, last4 }. */
+        public readonly ?array $authorization = null,
     ) {}
 }

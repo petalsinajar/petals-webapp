@@ -23,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
         __DIR__.'/../app/Modules/Recommendations/Console',
         __DIR__.'/../app/Modules/Media/Console',
         __DIR__.'/../app/Modules/Reviews/Console',
+        __DIR__.'/../app/Modules/Subscriptions/Console',
     ])
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([

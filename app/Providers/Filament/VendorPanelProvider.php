@@ -3,6 +3,7 @@
 namespace App\Providers\Filament;
 
 use App\Modules\Identity\Models\Vendor;
+use App\Modules\Subscriptions\Http\Middleware\EnsureWebDashboard;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -47,6 +48,8 @@ class VendorPanelProvider extends PanelProvider
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
             ])
-            ->authMiddleware([Authenticate::class]);
+            ->authMiddleware([Authenticate::class])
+            // Growth and above (plan feature web_dashboard).
+            ->tenantMiddleware([EnsureWebDashboard::class], isPersistent: true);
     }
 }

@@ -13,9 +13,11 @@ use App\Modules\Catalog\Models\Item;
 use App\Modules\Catalog\Models\ItemVariant;
 use App\Modules\Catalog\Models\Package;
 use App\Modules\Catalog\Services\CapacityWarnings;
+use App\Modules\Events\Models\EventType;
 use App\Modules\Identity\Models\Vendor;
 use App\Modules\Media\Models\Media;
 use App\Modules\Media\Services\MediaLibrary;
+use App\Modules\Subscriptions\Services\Entitlements;
 use App\Support\Paginated;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
@@ -54,6 +56,8 @@ class VendorInventoryController extends Controller
     public function store(Request $request, Vendor $vendor): JsonResponse
     {
         Gate::authorize('manage', $vendor);
+        // Over the plan's limit (e.g. after dropping to Starter): existing items stay live, no new ones.
+        app(Entitlements::class)->ensureRoomFor($vendor, 'items');
         $data = $request->validate($this->itemRules());
         $media = $this->itemMedia($data['media'] ?? [], $request, $vendor, null);
 
@@ -83,6 +87,9 @@ class VendorInventoryController extends Controller
         Gate::authorize('manage', $vendor);
         $model = $this->ownedItem($vendor, $item);
         $data = $request->validate($this->itemRules(partial: true));
+        if ($model->status === 'archived' && isset($data['status'])) {
+            app(Entitlements::class)->ensureRoomFor($vendor, 'items'); // bringing one back counts as adding
+        }
         $media = array_key_exists('media', $data) ? $this->itemMedia($data['media'], $request, $vendor, $model) : null;
 
         DB::transaction(function () use ($model, $data, $media) {
@@ -124,11 +131,12 @@ class VendorInventoryController extends Controller
     public function storePackage(Request $request, Vendor $vendor): PackageResource
     {
         Gate::authorize('manage', $vendor);
+        app(Entitlements::class)->ensureRoomFor($vendor, 'packages');
         $data = $request->validate([
             'title' => ['required', 'string', 'max:120'],
             'description' => ['nullable', 'string', 'max:2000'],
             'event_types' => ['array'],
-            'event_types.*' => [Rule::in(['wedding', 'birthday', 'corporate', 'other'])],
+            'event_types.*' => [EventType::rule()],
             'guest_min' => ['nullable', 'integer', 'min:1'],
             'guest_max' => ['nullable', 'integer', 'gte:guest_min'],
             'lines' => ['required', 'array', 'min:1', 'max:30'],
@@ -366,7 +374,7 @@ class VendorInventoryController extends Controller
             'media.*' => ['ulid', 'distinct'],
             'specs' => ['sometimes', 'nullable', 'array'],
             'event_types' => ['sometimes', 'array'],
-            'event_types.*' => [Rule::in(['wedding', 'birthday', 'corporate', 'other'])],
+            'event_types.*' => [EventType::rule()],
             'tags' => ['sometimes', 'array', 'max:20'],
             'tags.*' => ['string', 'max:30'],
             'pricing' => [$req, 'array:unit,currency,tiers'],

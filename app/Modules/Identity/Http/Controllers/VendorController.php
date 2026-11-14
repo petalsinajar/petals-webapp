@@ -4,13 +4,16 @@ namespace App\Modules\Identity\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Catalog\Models\Category;
+use App\Modules\Events\Models\EventType;
 use App\Modules\Identity\Enums\VendorRole;
 use App\Modules\Identity\Http\Resources\VendorResource;
+use App\Modules\Identity\Http\Resources\VendorSummary;
 use App\Modules\Identity\Models\User;
 use App\Modules\Identity\Models\Vendor;
 use App\Modules\Identity\Services\HandleRegistry;
 use App\Modules\Media\Models\Media;
 use App\Modules\Media\Services\MediaLibrary;
+use App\Modules\Subscriptions\Services\FeaturedPlacements;
 use App\Support\Actor;
 use App\Support\Geo;
 use Illuminate\Http\JsonResponse;
@@ -21,17 +24,18 @@ use Illuminate\Validation\Rule;
 
 class VendorController extends Controller
 {
-    private const EVENT_TYPES = ['wedding', 'birthday', 'corporate', 'other'];
-
     public function __construct(
         private readonly HandleRegistry $handles,
         private readonly MediaLibrary $media,
+        private readonly FeaturedPlacements $placements,
     ) {}
 
     /**
      * GET /v1/vendors?lat=&lng=&category=&event_type=&q= — with lat/lng, vendors whose service
      * area covers that venue, nearest first; with only q, a name search, most followed first.
-     * A category includes its children. One page of at most `limit`.
+     * A category includes its children. One page of at most `limit`. Near a venue, featured
+     * vendors that match (event type, area, and not closed on `date`) come back separately in
+     * `sponsored`, labelled; the organic list is unaffected.
      */
     public function index(Request $request): JsonResponse
     {
@@ -40,8 +44,9 @@ class VendorController extends Controller
             'lng' => ['required_without:q', 'required_with:lat', 'nullable', 'numeric', 'between:-180,180'],
             'q' => ['nullable', 'string', 'max:80'],
             'category' => ['nullable', 'string', 'max:40'],
-            'event_type' => ['nullable', Rule::in(self::EVENT_TYPES)],
+            'event_type' => ['nullable', EventType::rule()],
             'limit' => ['nullable', 'integer', 'between:1,50'],
+            'date' => ['nullable', 'date_format:Y-m-d'],
         ]);
         $near = isset($data['lat'], $data['lng']) ? [(float) $data['lat'], (float) $data['lng']] : null;
 
@@ -78,6 +83,10 @@ class VendorController extends Controller
                 'is_following' => in_array($vendor->id, $following, true),
             ])->values(),
             'next_cursor' => null,
+            'sponsored' => $near
+                ? $this->placements->sponsored($data['event_type'] ?? null, $near[0], $near[1], array_filter([$data['date'] ?? null]), category: $data['category'] ?? null)
+                    ->map(fn (Vendor $v) => FeaturedPlacements::card($v, VendorSummary::of($v)))->values()
+                : [],
         ]);
     }
 
@@ -200,7 +209,7 @@ class VendorController extends Controller
             'logo_media_id' => [...$sometimes, 'nullable', 'ulid'],
             'cover_media_id' => [...$sometimes, 'nullable', 'ulid'],
             'event_types' => [...$sometimes, 'array'],
-            'event_types.*' => [Rule::in(self::EVENT_TYPES)],
+            'event_types.*' => [EventType::rule()],
             'categories' => [...$sometimes, 'array'],
             'categories.*' => ['string', 'max:40'],
             'city' => [...$sometimes, 'nullable', 'string', 'max:80'],

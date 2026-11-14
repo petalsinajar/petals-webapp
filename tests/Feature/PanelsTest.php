@@ -17,7 +17,7 @@ class PanelsTest extends TestCase
         $this->get('/admin/login')->assertOk();
         $this->actingAs(User::factory()->admin()->create());
 
-        foreach (['/admin', '/admin/users', '/admin/vendors', '/admin/bookings', '/admin/posts', '/admin/reviews'] as $url) {
+        foreach (['/admin', '/admin/users', '/admin/vendors', '/admin/bookings', '/admin/posts', '/admin/reviews', '/admin/event-types', '/admin/plans', '/admin/subscriptions'] as $url) {
             $this->get($url)->assertOk();
         }
     }
@@ -32,11 +32,20 @@ class PanelsTest extends TestCase
     public function test_vendor_members_open_their_dashboard(): void
     {
         $owner = User::factory()->create();
-        Vendor::factory()->ownedBy($owner)->create(['handle' => 'royal.canopies']);
+        Vendor::factory()->ownedBy($owner)->onPlan('growth')->create(['handle' => 'royal.canopies']);
         $this->actingAs($owner);
 
         $this->get('/vendor/royal.canopies')->assertOk();
         $this->get('/vendor/royal.canopies/bookings')->assertOk();
+    }
+
+    public function test_the_web_dashboard_is_a_growth_plan_feature(): void
+    {
+        $owner = User::factory()->create();
+        Vendor::factory()->ownedBy($owner)->create(['handle' => 'royal.canopies']); // Starter
+        $this->actingAs($owner);
+
+        $this->get('/vendor/royal.canopies/bookings')->assertForbidden();
     }
 
     public function test_other_users_cannot_open_a_vendor_dashboard(): void

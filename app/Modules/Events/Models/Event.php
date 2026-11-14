@@ -18,8 +18,6 @@ class Event extends Model
     /** @use HasFactory<EventFactory> */
     use HasFactory, HasUlids, SoftDeletes;
 
-    public const TYPES = ['wedding', 'birthday', 'corporate', 'other'];
-
     public const VISIBILITIES = ['public', 'followers', 'invite_only', 'private'];
 
     protected $attributes = [

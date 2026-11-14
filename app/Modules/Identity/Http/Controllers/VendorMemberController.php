@@ -8,6 +8,7 @@ use App\Modules\Identity\Http\Resources\UserResource;
 use App\Modules\Identity\Models\User;
 use App\Modules\Identity\Models\Vendor;
 use App\Modules\Identity\Models\VendorMember;
+use App\Modules\Subscriptions\Services\Entitlements;
 use App\Support\PhoneNumber;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -44,6 +45,12 @@ class VendorMemberController extends Controller
         $user = User::where('phone', PhoneNumber::normalize($data['phone']))->first();
         if (! $user) {
             throw ValidationException::withMessages(['phone' => 'Ask them to sign up to the app first, then add them.']);
+        }
+
+        // Changing an existing member's role is fine; a new seat needs room on the plan.
+        $isMember = VendorMember::where(['vendor_id' => $vendor->id, 'user_id' => $user->id, 'status' => 'active'])->exists();
+        if (! $isMember) {
+            app(Entitlements::class)->ensureRoomFor($vendor, 'team');
         }
 
         $member = VendorMember::updateOrCreate(

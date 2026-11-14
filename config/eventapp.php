@@ -32,6 +32,7 @@ return [
         'dispute_window_hours' => 48,
         'default_deposit_percent' => 30,
         'default_buffer_hours' => 12,
+        // Fallback only: each booking snapshots its vendor's plan commission at checkout.
         'commission_percent' => (float) env('COMMISSION_PERCENT', 10),
         'service_fee_percent' => (float) env('SERVICE_FEE_PERCENT', 3),
     ],
@@ -179,7 +180,8 @@ return [
         'fairness_window_days' => 30,
         'fairness_cap' => 20,
         // Score = weighted sum of components, each 0..1.
-        'weights' => ['rating' => 0.25, 'experience' => 0.15, 'distance' => 0.2, 'price' => 0.15, 'fairness' => 0.25],
+        // plan: the vendor's visibility boost scaled to 0..1, kept small so the best match still wins.
+        'weights' => ['rating' => 0.25, 'experience' => 0.15, 'distance' => 0.2, 'price' => 0.15, 'fairness' => 0.25, 'plan' => 0.05],
 
         // In-app list, and the phone through OneSignal (see 'push' above).
         'channels' => ['database', 'push'],
@@ -229,6 +231,48 @@ return [
         'min_requests' => 5,
         // The cancellation rate is only shown on the profile above this share.
         'show_cancellation_rate_above' => 0.05,
+    ],
+
+    // Vendor plans (app/Modules/Subscriptions). Plans themselves (prices, limits, features,
+    // commission) live in the plans table and are edited in the admin panel.
+    'subscriptions' => [
+        // Vendors without a current subscription are on this plan.
+        'default_plan' => 'starter',
+        'trial_plan' => 'pro',
+        'trial_days' => 30,
+        // Unpaid at the end of a period: benefits continue this long, then Starter.
+        'grace_days' => 3,
+        // Reminders before a period ends, for vendors who pay by mobile money (prepaid).
+        'reminder_days' => [3, 1],
+        // Cards are charged this long before the period ends, so a failure still has time.
+        'renew_card_hours_before' => 6,
+        // Opens the subscription screen in the app, where the owner pays.
+        'pay_link' => 'petalsinajar://vendors/{vendor}/subscription',
+        // Featured weeks must be used within this many days of being granted.
+        'featured_credit_valid_days' => 60,
+        'featured_weeks_ahead' => 8,
+        'queue' => 'default',
+    ],
+
+    // Paid plans get a small nudge in ranked lists (nearby search, Discover, suggestions).
+    // Capped so a plan never outranks a clearly better match.
+    'visibility' => [
+        'boost' => ['standard' => 0.0, 'search_boost' => 0.03, 'priority' => 0.06, 'top' => 0.1],
+        'max_boost' => 0.1,
+        // Sponsored slot: featured vendors matching the search, always labelled, shown apart.
+        'sponsored_slots' => 2,
+    ],
+
+    // What each analytics level can see (each includes the levels before it).
+    'analytics' => [
+        'levels' => ['basic', 'standard', 'full', 'full_plus'],
+        'metrics' => [
+            'basic' => ['bookings', 'completed_bookings', 'rating'],
+            'standard' => ['revenue_minor', 'acceptance_rate', 'response_time_minutes', 'top_items'],
+            'full' => ['post_engagement', 'shop_taps', 'suggestions', 'cancellation_rate'],
+            'full_plus' => ['daily', 'repeat_customers'],
+        ],
+        'max_days' => 365,
     ],
 
     // Public landing page and pre-launch waitlist.

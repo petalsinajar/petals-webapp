@@ -177,6 +177,7 @@ class RecommendationService
                 'distance' => $this->rules->distanceScore($km, $vendor->service_radius_km),
                 'price' => $this->rules->priceScore($estimate, $event->budget_minor),
                 'fairness' => $this->rules->fairnessScore($recent[$vendorId] ?? 0),
+                'plan' => $this->rules->planScore((float) $vendor->visibility_boost),
             ];
 
             $matches[] = new VendorMatch($vendor, $category, $this->rules->score($components),

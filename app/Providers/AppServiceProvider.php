@@ -32,6 +32,8 @@ use App\Modules\Media\Storage\R2MediaStorage;
 use App\Modules\Media\Video\CloudflareStreamProvider;
 use App\Modules\Media\Video\FakeVideoProvider;
 use App\Modules\Payments\Contracts\PaymentGateway;
+use App\Modules\Payments\Events\PaymentFailed;
+use App\Modules\Payments\Events\PaymentSucceeded;
 use App\Modules\Payments\Gateways\FakeGateway;
 use App\Modules\Payments\Gateways\PaystackGateway;
 use App\Modules\Recommendations\Listeners\MarkRecommendationBooked;
@@ -39,6 +41,8 @@ use App\Modules\Reviews\Models\Review;
 use App\Modules\Social\Listeners\PublishPostWhenMediaIsReady;
 use App\Modules\Social\Models\Comment;
 use App\Modules\Social\Models\Post;
+use App\Modules\Subscriptions\Listeners\ApplySubscriptionPayment;
+use App\Modules\Subscriptions\Services\Entitlements;
 use App\Support\Push\OneSignalChannel;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
@@ -60,6 +64,8 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(CatalogReader::class, fn () => new SqlCatalogReader);
         // Per request/job: stock warnings from ItemVariant's hook, read by whoever saved it.
         $this->app->scoped(CapacityWarnings::class);
+        // What each vendor's plan allows, resolved once per request/job.
+        $this->app->scoped(Entitlements::class);
 
         // Uploads: R2 + Cloudflare Stream; the test suite uses the fakes (phpunit.xml).
         $this->app->singleton(MediaStorage::class, fn () => config('eventapp.media.storage') === 'fake'
@@ -110,6 +116,8 @@ class AppServiceProvider extends ServiceProvider
         // Cross-module reactions. Listeners are queued, so they never slow the request.
         Events::listen(BookingCreated::class, MarkRecommendationBooked::class);
         Events::listen([MediaReady::class, MediaFailed::class], PublishPostWhenMediaIsReady::class);
+        // Subscription payments: run inside the webhook's transaction.
+        Events::listen([PaymentSucceeded::class, PaymentFailed::class], ApplySubscriptionPayment::class);
 
         // `push` in a notification's via(): the phone, through OneSignal.
         Notification::extend('push', fn ($app) => $app->make(OneSignalChannel::class));

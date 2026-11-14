@@ -5,6 +5,7 @@ use App\Modules\Bookings\Http\Controllers\CheckoutController;
 use App\Modules\Catalog\Http\Controllers\CatalogController;
 use App\Modules\Catalog\Http\Controllers\VendorInventoryController;
 use App\Modules\Events\Http\Controllers\EventController;
+use App\Modules\Events\Http\Controllers\EventTypeController;
 use App\Modules\Identity\Http\Controllers\AuthController;
 use App\Modules\Identity\Http\Controllers\MeController;
 use App\Modules\Identity\Http\Controllers\ProfileController;
@@ -22,6 +23,7 @@ use App\Modules\Social\Http\Controllers\FollowController;
 use App\Modules\Social\Http\Controllers\NotificationController;
 use App\Modules\Social\Http\Controllers\PostController;
 use App\Modules\Social\Http\Controllers\PostTagController;
+use App\Modules\Subscriptions\Http\Controllers\SubscriptionController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -56,6 +58,7 @@ Route::middleware(['auth.optional', 'throttle:api'])->group(function () {
     Route::get('items/{item}', [CatalogController::class, 'show']);
     Route::get('packages', [CatalogController::class, 'packages']);
     Route::get('packages/{package}', [CatalogController::class, 'package']);
+    Route::get('event-types', [EventTypeController::class, 'index']);
     Route::get('vendors', [VendorController::class, 'index']);
     Route::get('vendors/{vendor}/packages', [CatalogController::class, 'vendorPackages']);
     Route::get('vendors/{vendor}', [VendorController::class, 'show']);
@@ -82,6 +85,9 @@ Route::middleware(['auth:sanctum', 'abilities:access', 'active', 'throttle:api']
     Route::post('uploads/{media}/complete', [UploadController::class, 'complete'])->whereUlid('media');
     Route::get('media/{media}', [MediaController::class, 'show'])->whereUlid('media');
 
+    // Vendor plans
+    Route::get('plans', [SubscriptionController::class, 'plans']);
+
     // Vendors
     Route::post('vendors', [VendorController::class, 'store']);
     Route::patch('vendors/{vendor}', [VendorController::class, 'update'])->whereUlid('vendor');
@@ -107,6 +113,14 @@ Route::middleware(['auth:sanctum', 'abilities:access', 'active', 'throttle:api']
         Route::get('bookings', [BookingController::class, 'forVendor']);
         Route::post('bookings', [BookingController::class, 'record']);
         Route::get('recommendation-stats', [SuggestionController::class, 'vendorStats']);
+        Route::get('subscription', [SubscriptionController::class, 'show']);
+        Route::post('subscription/trial', [SubscriptionController::class, 'trial']);
+        Route::post('subscription/checkout', [SubscriptionController::class, 'checkout']);
+        Route::post('subscription/cancel', [SubscriptionController::class, 'cancel']);
+        Route::post('subscription/resume', [SubscriptionController::class, 'resume']);
+        Route::post('subscription/auto-renew', [SubscriptionController::class, 'autoRenew']);
+        Route::post('featured-credits/{credit}/use', [SubscriptionController::class, 'useCredit'])->whereUlid('credit');
+        Route::get('analytics', [SubscriptionController::class, 'analytics']);
         Route::get('post-tags', [PostTagController::class, 'index']);
         Route::post('post-tags/{tag}', [PostTagController::class, 'update']);
     });

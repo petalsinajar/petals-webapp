@@ -28,6 +28,15 @@ class FakeGateway implements PaymentGateway
         ];
     }
 
+    /** Authorizations starting with "AUTH_declined" fail; any other succeeds at once. */
+    public function chargeAuthorization(Payment $payment, User $payer, string $authorizationCode): array
+    {
+        return [
+            'reference' => 'fake_'.$payment->id,
+            'status' => str_starts_with($authorizationCode, 'AUTH_declined') ? 'failed' : 'success',
+        ];
+    }
+
     public function parseWebhook(Request $request): ?WebhookResult
     {
         if (! app()->environment(['local', 'testing'])) {
@@ -40,6 +49,7 @@ class FakeGateway implements PaymentGateway
             amountMinor: $request->integer('amount_minor') ?: null,
             method: $request->input('method', 'momo'),
             raw: $request->all(),
+            authorization: $request->input('authorization'),
         );
     }
 

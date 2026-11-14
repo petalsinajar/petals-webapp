@@ -6,8 +6,11 @@ use App\Filament\Vendor\Resources\Items\Pages\ManageItems;
 use App\Modules\Catalog\Models\Category;
 use App\Modules\Catalog\Models\Item;
 use App\Modules\Catalog\Services\CapacityWarnings;
+use App\Modules\Events\Models\EventType;
+use App\Modules\Subscriptions\Services\Entitlements;
 use BackedEnum;
 use Filament\Actions\EditAction;
+use Filament\Facades\Filament;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -41,6 +44,14 @@ class ItemResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'title';
 
+    /** Over the plan's item limit, existing items stay editable but no new ones. */
+    public static function canCreate(): bool
+    {
+        $vendor = Filament::getTenant();
+
+        return parent::canCreate() && (! $vendor || app(Entitlements::class)->canAddItem($vendor));
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
@@ -50,7 +61,7 @@ class ItemResource extends Resource
                     ->options(fn () => Category::orderBy('sort')->pluck('name', 'id')->all()),
                 Textarea::make('description')->columnSpanFull(),
                 Select::make('event_types')->multiple()
-                    ->options(['wedding' => 'Wedding', 'birthday' => 'Birthday', 'corporate' => 'Corporate', 'other' => 'Other']),
+                    ->options(fn () => EventType::options()),
                 Select::make('status')->required()->default('draft')
                     ->options(['draft' => 'Draft', 'active' => 'Active', 'paused' => 'Paused', 'archived' => 'Archived']),
             ]),

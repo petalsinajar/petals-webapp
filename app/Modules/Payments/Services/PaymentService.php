@@ -14,6 +14,8 @@ use App\Modules\Catalog\Contracts\CatalogReader;
 use App\Modules\Identity\Models\User;
 use App\Modules\Payments\Contracts\PaymentGateway;
 use App\Modules\Payments\Data\WebhookResult;
+use App\Modules\Payments\Events\PaymentFailed;
+use App\Modules\Payments\Events\PaymentSucceeded;
 use App\Modules\Payments\Models\LedgerEntry;
 use App\Modules\Payments\Models\Payment;
 use Illuminate\Support\Facades\DB;
@@ -78,6 +80,73 @@ class PaymentService
         return ['payment' => $payment, 'authorization_url' => $started['authorization_url']];
     }
 
+    /**
+     * Start a payment that isn't for a checkout (purpose "subscription"). The module that owns
+     * the purpose listens for PaymentSucceeded / PaymentFailed.
+     *
+     * @return array{payment: Payment, authorization_url: string|null}
+     */
+    public function startStandalone(User $payer, string $purpose, int $amountMinor, string $currency, ?string $idempotencyKey = null): array
+    {
+        $key = $idempotencyKey ?: (string) Str::uuid();
+
+        if ($existing = Payment::where('idempotency_key', $key)->first()) {
+            return ['payment' => $existing, 'authorization_url' => $existing->raw['authorization_url'] ?? null];
+        }
+
+        $payment = $this->standalonePayment($payer, $purpose, $amountMinor, $currency, $key);
+        $started = $this->gateway->initialize($payment, $payer);
+        $payment->forceFill([
+            'provider_ref' => $started['reference'],
+            'raw' => ['authorization_url' => $started['authorization_url']],
+        ])->save();
+
+        return ['payment' => $payment, 'authorization_url' => $started['authorization_url']];
+    }
+
+    /**
+     * Charge a saved card without the payer present. A final answer is applied at once, the
+     * same way a webhook would be; a later webhook for it is then a no-op.
+     */
+    public function chargeSaved(User $payer, string $purpose, int $amountMinor, string $currency, string $authorizationCode, string $idempotencyKey): Payment
+    {
+        if ($existing = Payment::where('idempotency_key', $idempotencyKey)->first()) {
+            return $existing;
+        }
+
+        $payment = $this->standalonePayment($payer, $purpose, $amountMinor, $currency, $idempotencyKey);
+        $charged = $this->gateway->chargeAuthorization($payment, $payer, $authorizationCode);
+        $payment->forceFill(['provider_ref' => $charged['reference'], 'method' => 'card'])->save();
+
+        if ($charged['status'] !== 'pending') {
+            $this->handleWebhook(new WebhookResult(
+                reference: $payment->provider_ref,
+                succeeded: $charged['status'] === 'success',
+                amountMinor: $payment->amount_minor,
+                method: 'card',
+                raw: ['charge_authorization' => $charged['status']],
+            ));
+        }
+
+        return $payment->refresh();
+    }
+
+    private function standalonePayment(User $payer, string $purpose, int $amountMinor, string $currency, string $key): Payment
+    {
+        return Payment::create([
+            'checkout_id' => null,
+            'payer_id' => $payer->id,
+            'purpose' => $purpose,
+            'amount_minor' => $amountMinor,
+            'currency' => $currency,
+            'allocations' => [],
+            'provider' => $this->gateway->name(),
+            'provider_ref' => 'EA-'.Str::upper(Str::random(16)),
+            'idempotency_key' => $key,
+            'status' => 'pending',
+        ]);
+    }
+
     /** Called from the provider webhook. Safe to call more than once for the same payment. */
     public function handleWebhook(WebhookResult $result): void
     {
@@ -94,7 +163,10 @@ class PaymentService
             }
 
             if (! $result->succeeded) {
-                $payment->forceFill(['status' => 'failed', 'raw' => $result->raw])->save();
+                $payment->forceFill(['status' => 'failed', 'raw' => [...($payment->raw ?? []), 'webhook' => $result->raw]])->save();
+                if ($payment->checkout_id === null) {
+                    event(new PaymentFailed($payment));
+                }
 
                 return [];
             }
@@ -102,6 +174,9 @@ class PaymentService
             if ($result->amountMinor !== null && $result->amountMinor !== $payment->amount_minor) {
                 Log::warning('Payment amount mismatch', ['payment' => $payment->id, 'expected' => $payment->amount_minor, 'got' => $result->amountMinor]);
                 $payment->forceFill(['status' => 'failed', 'raw' => $result->raw])->save();
+                if ($payment->checkout_id === null) {
+                    event(new PaymentFailed($payment));
+                }
 
                 return [];
             }
@@ -112,6 +187,13 @@ class PaymentService
                 'raw' => [...($payment->raw ?? []), 'webhook' => $result->raw],
                 'paid_at' => now(),
             ])->save();
+
+            // Not for a checkout: the module that started it takes it from here, in this transaction.
+            if ($payment->checkout_id === null) {
+                event(new PaymentSucceeded($payment, $result));
+
+                return [];
+            }
 
             $touched = [];
             foreach ($payment->allocations as $bookingId => $amount) {

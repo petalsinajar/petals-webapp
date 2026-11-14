@@ -17,6 +17,7 @@ use App\Modules\Catalog\Models\Blackout;
 use App\Modules\Events\Models\Event;
 use App\Modules\Identity\Models\User;
 use App\Modules\Identity\Models\Vendor;
+use App\Modules\Subscriptions\Services\Entitlements;
 use App\Support\Geo;
 use App\Support\Money;
 use Carbon\CarbonImmutable;
@@ -41,6 +42,7 @@ class CheckoutService
     public function __construct(
         private readonly CatalogReader $catalog,
         private readonly AvailabilityStore $store,
+        private readonly Entitlements $entitlements,
     ) {}
 
     /**
@@ -211,7 +213,8 @@ class CheckoutService
             : 0;
         $serviceFee = Money::percent($subtotal, (float) config('eventapp.bookings.service_fee_percent'));
         $total = $subtotal + $delivery + $setup + $serviceFee;
-        $commissionPercent = (float) config('eventapp.bookings.commission_percent');
+        // The vendor's plan sets the commission; the booking keeps the rate it was made at.
+        $commissionPercent = $this->entitlements->commissionPercent($vendor);
         $depositPercent = (int) $vendor->policy('deposit_percent');
 
         return [

@@ -11,6 +11,7 @@ use App\Modules\Catalog\Models\Blackout;
 use App\Modules\Catalog\Models\Category;
 use App\Modules\Catalog\Models\Item;
 use App\Modules\Catalog\Models\Package;
+use App\Modules\Events\Models\EventType;
 use App\Support\Geo;
 use App\Support\Paginated;
 use Carbon\CarbonImmutable;
@@ -18,7 +19,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /** Public catalog browsing for hosts and guests. */
@@ -48,7 +48,7 @@ class CatalogController extends Controller
     {
         $data = $request->validate([
             'category' => ['nullable', 'string', 'max:40'],
-            'event_type' => ['nullable', Rule::in(['wedding', 'birthday', 'corporate', 'other'])],
+            'event_type' => ['nullable', EventType::rule()],
             'vendor_id' => ['nullable', 'ulid'],
             'q' => ['nullable', 'string', 'max:80'],
             'lat' => ['nullable', 'numeric', 'between:-90,90', 'required_with:lng'],
@@ -141,7 +141,7 @@ class CatalogController extends Controller
         $data = $request->validate([
             'lat' => ['required', 'numeric', 'between:-90,90'],
             'lng' => ['required', 'numeric', 'between:-180,180'],
-            'event_type' => ['nullable', Rule::in(['wedding', 'birthday', 'corporate', 'other'])],
+            'event_type' => ['nullable', EventType::rule()],
             'limit' => ['nullable', 'integer', 'between:1,50'],
         ]);
 

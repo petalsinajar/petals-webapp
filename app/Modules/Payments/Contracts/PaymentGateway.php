@@ -22,6 +22,14 @@ interface PaymentGateway
      */
     public function initialize(Payment $payment, User $payer): array;
 
+    /**
+     * Charge a saved card authorization (renewals) without the payer present. The result may
+     * be final at once; a webhook for the same reference may follow and must be harmless.
+     *
+     * @return array{reference: string, status: 'success'|'failed'|'pending'}
+     */
+    public function chargeAuthorization(Payment $payment, User $payer, string $authorizationCode): array;
+
     /** Verify and parse a webhook. Returns null if the signature is invalid. */
     public function parseWebhook(Request $request): ?WebhookResult;
 

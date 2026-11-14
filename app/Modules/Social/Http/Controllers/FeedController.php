@@ -4,6 +4,7 @@ namespace App\Modules\Social\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Events\Models\Event;
+use App\Modules\Events\Models\EventType;
 use App\Modules\Identity\Models\User;
 use App\Modules\Identity\Models\Vendor;
 use App\Modules\Social\Services\FeedService;
@@ -13,7 +14,6 @@ use Illuminate\Contracts\Pagination\CursorPaginator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Validation\Rule;
 
 class FeedController extends Controller
 {
@@ -31,7 +31,7 @@ class FeedController extends Controller
     /** GET /v1/feed/discover?event_type= */
     public function discover(Request $request): JsonResponse
     {
-        $request->validate(['event_type' => ['nullable', Rule::in(Event::TYPES)]]);
+        $request->validate(['event_type' => ['nullable', EventType::rule()]]);
 
         return $this->respond($this->feeds->discover($request->user(), $request->query('event_type')), $request);
     }
