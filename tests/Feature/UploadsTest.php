@@ -8,7 +8,10 @@ use App\Modules\Media\Contracts\ContentModeration;
 use App\Modules\Media\Data\ModerationVerdict;
 use App\Modules\Media\Models\Media;
 use App\Modules\Media\Video\StreamWebhook;
+use GuzzleHttp\Psr7\Response as Psr7Response;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
@@ -304,6 +307,54 @@ class UploadsTest extends TestCase
             ->assertJsonPath('duration_ms', 42400)
             ->assertJsonPath('urls.hls', "https://stream.test/{$media->provider_ref}/manifest/video.m3u8")
             ->assertJsonPath('urls.poster', "https://stream.test/{$media->provider_ref}/thumbnails/thumbnail.jpg");
+    }
+
+    public function test_without_a_video_provider_videos_are_refused_plainly(): void
+    {
+        $this->signIn();
+        $this->videoProvider()->available = false;
+
+        $this->postJson('/v1/uploads', ['kind' => 'video', 'purpose' => 'post', 'mime' => 'video/mp4', 'bytes' => 8_000_000])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['kind' => "Video uploads aren't available yet."]);
+        $this->assertSame(0, Media::count());
+    }
+
+    public function test_a_full_video_account_refuses_plainly_instead_of_failing(): void
+    {
+        $this->signIn();
+        // What Cloudflare Stream answers when its storage is used up.
+        $this->videoProvider()->failCreate = new RequestException(new Response(new Psr7Response(413, [], json_encode([
+            'result' => null, 'success' => false,
+            'errors' => [['code' => 10011, 'message' => 'Storage capacity exceeded']],
+        ]))));
+
+        $this->postJson('/v1/uploads', ['kind' => 'video', 'purpose' => 'post', 'mime' => 'video/mp4', 'bytes' => 8_000_000])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['kind' => "Videos can't be uploaded right now."]);
+        $this->assertSame(0, Media::count());
+    }
+
+    public function test_a_video_still_finishes_when_the_webhook_never_comes(): void
+    {
+        $this->signIn();
+        $upload = $this->requestUpload(['kind' => 'video', 'mime' => 'video/mp4', 'bytes' => 8_000_000]);
+        $media = Media::find($upload['media_id']);
+        $this->videoProvider()->simulateUpload($media->provider_ref, 8_000_000);
+        $this->postJson("/v1/uploads/{$media->id}/complete")->assertJsonPath('status', 'processing');
+
+        // Stream finishes, but its webhook is missing or misconfigured.
+        $this->getJson("/v1/media/{$media->id}")->assertJsonPath('status', 'processing');
+        $this->videoProvider()->simulateReady($media->provider_ref, seconds: 30.0);
+
+        // Asked again within 15 seconds: no extra call to the provider yet.
+        $this->getJson("/v1/media/{$media->id}")->assertJsonPath('status', 'processing');
+
+        $this->travel(16)->seconds();
+        $this->getJson("/v1/media/{$media->id}")
+            ->assertJsonPath('status', 'ready')
+            ->assertJsonPath('duration_ms', 30000)
+            ->assertJsonPath('urls.hls', "https://stream.test/{$media->provider_ref}/manifest/video.m3u8");
     }
 
     public function test_video_size_must_match_what_was_declared(): void

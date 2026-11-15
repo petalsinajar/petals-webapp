@@ -13,7 +13,9 @@ use App\Modules\Media\Enums\MediaStatus;
 use App\Modules\Media\Jobs\ProcessMedia;
 use App\Modules\Media\Models\Media;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Throwable;
@@ -38,6 +40,12 @@ class UploadService
         $expiresAt = CarbonImmutable::now()->addMinutes(config('eventapp.media.upload_ttl_minutes'));
         $kind = MediaKind::from($data['kind']);
 
+        // Without a video provider set up, say so plainly (a 422 the app shows, not a 500
+        // it would keep retrying).
+        if ($kind === MediaKind::Video && ! $this->video->isAvailable()) {
+            throw ValidationException::withMessages(['kind' => 'Video uploads aren\'t available yet. Post photos for now.']);
+        }
+
         $media = new Media([
             'owner_id' => $owner->id,
             'vendor_id' => $vendor?->id,
@@ -49,7 +57,7 @@ class UploadService
         $media->id = strtolower((string) Str::ulid());
 
         if ($kind === MediaKind::Video) {
-            [$ref, $upload] = $this->video->createUpload($media->id, config('eventapp.media.video.max_duration_seconds'), $expiresAt);
+            [$ref, $upload] = $this->createVideoUpload($media, $expiresAt);
             $media->provider_ref = $ref;
         } else {
             $media->storage_key = 'uploads/'.now()->format('Y/m').'/'.$media->id;
@@ -124,6 +132,30 @@ class UploadService
         }
         if ($status->bytes !== null && $status->bytes !== $media->bytes) {
             $this->reject($media, 'size_mismatch', "The video is {$status->bytes} bytes, not the {$media->bytes} declared.");
+        }
+    }
+
+    /**
+     * The provider's upload URL. A full account (Cloudflare Stream: 413, code 10011) is
+     * refused plainly, not as a 500 the app would retry; each retry would reserve more.
+     *
+     * @return array{0: string, 1: UploadInstruction}
+     */
+    private function createVideoUpload(Media $media, CarbonImmutable $expiresAt): array
+    {
+        try {
+            return $this->video->createUpload($media->id, config('eventapp.media.video.max_duration_seconds'), $expiresAt);
+        } catch (RequestException $e) {
+            $codes = array_column($e->response->json('errors') ?? [], 'code');
+            if ($e->response->status() !== 413 && ! in_array(10011, $codes, true)) {
+                throw $e;
+            }
+            Log::error('Video provider storage is full: video uploads are refused until it has room', [
+                'status' => $e->response->status(),
+                'errors' => $e->response->json('errors'),
+            ]);
+
+            throw ValidationException::withMessages(['kind' => 'Videos can\'t be uploaded right now. Post photos for now.']);
         }
     }
 

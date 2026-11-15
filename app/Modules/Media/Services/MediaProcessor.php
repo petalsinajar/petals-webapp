@@ -10,8 +10,11 @@ use App\Modules\Media\Enums\MediaStatus;
 use App\Modules\Media\Events\MediaFailed;
 use App\Modules\Media\Events\MediaReady;
 use App\Modules\Media\Models\Media;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Intervention\Image\Exceptions\DecoderException;
+use Throwable;
 
 /**
  * uploaded → processing → ready | failed | rejected. Every step re-checks the status under a
@@ -35,6 +38,27 @@ class MediaProcessor
         }
 
         $media->isImage() ? $this->processImage($media) : $this->applyVideo($media, $this->video->status($media->provider_ref));
+    }
+
+    /**
+     * A video still processing, asked about by the app while it waits: check the provider
+     * directly (at most every 15 seconds per video), so videos finish even when the
+     * provider's webhook is missing or misconfigured. Never throws: the app just keeps waiting.
+     */
+    public function refreshVideo(Media $media): void
+    {
+        if ($media->isImage() || $media->status !== MediaStatus::Processing || ! $media->provider_ref) {
+            return;
+        }
+        if (! Cache::add("media:refresh:{$media->id}", true, now()->addSeconds(15))) {
+            return;
+        }
+
+        try {
+            $this->videoUpdated($this->video->status($media->provider_ref));
+        } catch (Throwable $e) {
+            Log::warning('Video status check failed', ['media' => $media->id, 'error' => $e->getMessage()]);
+        }
     }
 
     /** From the provider's webhook. Unknown videos and already-final media are ignored. */

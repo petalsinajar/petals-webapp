@@ -24,6 +24,11 @@ class CloudflareStreamProvider implements VideoProvider
         return new self(config('eventapp.media.cloudflare_stream'));
     }
 
+    public function isAvailable(): bool
+    {
+        return filled($this->config['account_id']) && filled($this->config['api_token']);
+    }
+
     public function createUpload(string $mediaId, int $maxDurationSeconds, CarbonImmutable $expiresAt): array
     {
         $result = $this->api()->post('direct_upload', [

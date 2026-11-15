@@ -21,8 +21,22 @@ class FakeVideoProvider implements VideoProvider
     /** @var list<string> */
     public array $deleted = [];
 
+    /** Tests turn video off with this. */
+    public bool $available = true;
+
+    public function isAvailable(): bool
+    {
+        return $this->available;
+    }
+
+    /** Tests make the next upload request fail with this. */
+    public ?\Throwable $failCreate = null;
+
     public function createUpload(string $mediaId, int $maxDurationSeconds, CarbonImmutable $expiresAt): array
     {
+        if ($this->failCreate) {
+            throw $this->failCreate;
+        }
         $uid = Str::lower(Str::random(32));
         $this->videos[$uid] = ['uid' => $uid, 'status' => ['state' => 'pendingupload'], 'meta' => ['media_id' => $mediaId], 'maxDurationSeconds' => $maxDurationSeconds];
 

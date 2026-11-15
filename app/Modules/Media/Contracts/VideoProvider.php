@@ -13,6 +13,9 @@ use Illuminate\Http\Request;
  */
 interface VideoProvider
 {
+    /** False until the provider's account is configured: video uploads are then refused. */
+    public function isAvailable(): bool;
+
     /**
      * A one-off upload URL for one video.
      *
