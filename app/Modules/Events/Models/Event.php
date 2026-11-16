@@ -2,6 +2,7 @@
 
 namespace App\Modules\Events\Models;
 
+use App\Modules\Bookings\Models\Booking;
 use App\Modules\Identity\Models\User;
 use App\Modules\Media\Models\Media;
 use Database\Factories\EventFactory;
@@ -69,6 +70,12 @@ class Event extends Model
     public function host(): BelongsTo
     {
         return $this->belongsTo(User::class, 'host_id');
+    }
+
+    /** @return HasMany<Booking, $this> */
+    public function bookings(): HasMany
+    {
+        return $this->hasMany(Booking::class);
     }
 
     /** @return HasMany<EventMember, $this> */

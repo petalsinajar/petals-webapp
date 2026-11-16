@@ -7,11 +7,11 @@ use App\Modules\Events\Http\Resources\EventResource;
 use App\Modules\Events\Models\Event;
 use App\Modules\Events\Models\EventMember;
 use App\Modules\Events\Models\EventType;
+use App\Modules\Events\Services\EventInvites;
 use App\Modules\Identity\Http\Resources\UserResource;
 use App\Modules\Identity\Models\User;
 use App\Modules\Media\Services\MediaLibrary;
 use App\Support\Paginated;
-use App\Support\PhoneNumber;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -145,8 +145,11 @@ class EventController extends Controller
         ]);
     }
 
-    /** POST /v1/events/{event}/members — invite by user id or phone (people not on the app yet). */
-    public function invite(Request $request, Event $event): JsonResponse
+    /**
+     * POST /v1/events/{event}/members — invite guests or co-hosts by user id, or by phone for
+     * people not on the app yet. Inviting a guest as a co-host promotes them.
+     */
+    public function invite(Request $request, Event $event, EventInvites $invites): JsonResponse
     {
         Gate::authorize('manage', $event);
         $data = $request->validate([
@@ -156,24 +159,39 @@ class EventController extends Controller
             'invites.*.role' => ['nullable', Rule::in(['guest', 'cohost'])],
         ]);
 
-        $created = 0;
-        foreach ($data['invites'] as $invite) {
-            $userId = $invite['user_id'] ?? null;
-            $phone = isset($invite['phone']) ? PhoneNumber::normalize($invite['phone']) : null;
-            $userId ??= $phone ? User::where('phone', $phone)->value('id') : null;
+        return response()->json(['invited' => $invites->invite($event, $request->user(), $data['invites'])], 201);
+    }
 
-            if (! $userId && ! $phone) {
-                continue;
-            }
+    /**
+     * PATCH /v1/events/{event}/members/{member} { role: guest|cohost } — only the event's
+     * creator makes or unmakes co-hosts.
+     */
+    public function updateMember(Request $request, Event $event, EventMember $member): JsonResponse
+    {
+        abort_unless($member->event_id === $event->id, 404);
+        abort_unless($request->user()->id === $event->host_id, 403, 'Only the host can change co-hosts.');
+        abort_if($member->user_id === $event->host_id, 422, 'The host stays the host.');
+        $data = $request->validate(['role' => ['required', Rule::in(['guest', 'cohost'])]]);
 
-            $member = EventMember::firstOrCreate(
-                $userId ? ['event_id' => $event->id, 'user_id' => $userId] : ['event_id' => $event->id, 'invite_phone' => $phone],
-                ['role' => $invite['role'] ?? 'guest', 'rsvp' => 'invited', 'invited_by' => $request->user()->id, 'invite_phone' => $userId ? null : $phone],
-            );
-            $created += $member->wasRecentlyCreated ? 1 : 0;
-        }
+        $member->update(['role' => $data['role']]);
 
-        return response()->json(['invited' => $created], 201);
+        return response()->json(['id' => $member->id, 'role' => $member->role]);
+    }
+
+    /**
+     * DELETE /v1/events/{event}/members/{member} — the host removes anyone but themself;
+     * co-hosts remove guests.
+     */
+    public function removeMember(Request $request, Event $event, EventMember $member): JsonResponse
+    {
+        abort_unless($member->event_id === $event->id, 404);
+        Gate::authorize('manage', $event);
+        abort_if($member->user_id === $event->host_id, 422, 'The host can\'t be removed.');
+        abort_if($member->role === 'cohost' && $request->user()->id !== $event->host_id, 403, 'Only the host can remove co-hosts.');
+
+        $member->delete();
+
+        return response()->json(['message' => 'Removed.']);
     }
 
     /** PUT /v1/events/{event}/rsvp */

@@ -72,11 +72,13 @@ Route::middleware(['auth:sanctum', 'abilities:access', 'active', 'throttle:api']
     Route::post('auth/logout', [AuthController::class, 'logout']);
     Route::get('me', [MeController::class, 'show']);
     Route::patch('me', [MeController::class, 'update']);
+    Route::delete('me', [MeController::class, 'destroy']);
     Route::put('me/dashboard-credentials', [MeController::class, 'dashboardCredentials']);
     Route::post('me/devices', [MeController::class, 'registerDevice']);
     Route::get('me/events', [EventController::class, 'mine']);
     Route::get('me/bookings', [BookingController::class, 'mine']);
     Route::get('handles/{handle}/available', [MeController::class, 'handleAvailable']);
+    Route::get('users', [ProfileController::class, 'search']); // ?q= — people to invite
     Route::get('users/{handle}', [ProfileController::class, 'show']);
     Route::get('users/{user}/posts', [FeedController::class, 'userPosts'])->whereUlid('user');
 
@@ -136,6 +138,8 @@ Route::middleware(['auth:sanctum', 'abilities:access', 'active', 'throttle:api']
     Route::patch('events/{event}', [EventController::class, 'update']);
     Route::get('events/{event}/members', [EventController::class, 'members']);
     Route::post('events/{event}/members', [EventController::class, 'invite']);
+    Route::patch('events/{event}/members/{member}', [EventController::class, 'updateMember']);
+    Route::delete('events/{event}/members/{member}', [EventController::class, 'removeMember']);
     Route::put('events/{event}/rsvp', [EventController::class, 'rsvp']);
     Route::get('events/{event}/posts', [FeedController::class, 'event']);
     Route::get('events/{event}/bookings', [BookingController::class, 'forEvent']);

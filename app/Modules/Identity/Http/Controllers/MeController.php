@@ -5,6 +5,7 @@ namespace App\Modules\Identity\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Identity\Http\Resources\MeResource;
 use App\Modules\Identity\Models\Device;
+use App\Modules\Identity\Services\AccountDeletion;
 use App\Modules\Identity\Services\HandleRegistry;
 use App\Modules\Media\Services\MediaLibrary;
 use Illuminate\Http\JsonResponse;
@@ -19,6 +20,26 @@ class MeController extends Controller
         private readonly HandleRegistry $handles,
         private readonly MediaLibrary $media,
     ) {}
+
+    /**
+     * DELETE /v1/me { confirm: "DELETE" } — deletes the account (see AccountDeletion).
+     * Refused with the reason while bookings are in progress or a business would be left
+     * without an owner.
+     */
+    public function destroy(Request $request, AccountDeletion $deletion): JsonResponse
+    {
+        $request->validate(['confirm' => ['required', Rule::in(['DELETE'])]], [
+            'confirm.in' => 'Type DELETE to confirm.',
+        ]);
+        $user = $request->user();
+
+        if ($reason = $deletion->blocker($user)) {
+            return response()->json(['message' => $reason, 'code' => 'account_in_use'], 409);
+        }
+        $deletion->delete($user);
+
+        return response()->json(['message' => 'Your account has been deleted.']);
+    }
 
     /** GET /v1/me */
     public function show(Request $request): MeResource

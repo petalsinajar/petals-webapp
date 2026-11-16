@@ -3,6 +3,7 @@
 namespace App\Modules\Identity\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Events\Services\EventInvites;
 use App\Modules\Identity\Http\Resources\MeResource;
 use App\Modules\Identity\Models\User;
 use App\Modules\Identity\Services\HandleRegistry;
@@ -20,6 +21,7 @@ class AuthController extends Controller
         private readonly OtpService $otp,
         private readonly TokenService $tokens,
         private readonly HandleRegistry $handles,
+        private readonly EventInvites $invites,
     ) {}
 
     /** POST /v1/auth/otp */
@@ -66,6 +68,8 @@ class AuthController extends Controller
         }
 
         $user->forceFill(['last_active_at' => now()])->save();
+        // Events they were invited to by phone before they had an account.
+        $this->invites->claimPhoneInvites($user);
 
         return response()->json([
             ...$this->tokens->issue($user, $data['device_name']),

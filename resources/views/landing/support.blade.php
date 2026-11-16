@@ -96,7 +96,11 @@
             {{-- DRAFT: have the retention wording reviewed before launch (Ghana Data Protection Act, 2012). --}}
             <div class="mt-4 space-y-5 text-lg leading-relaxed text-ink-soft">
                 <p>
-                    You can ask us to delete your Petals in a Jar account at any time.
+                    You can delete your account yourself in the app: <strong class="text-ink">Profile → Settings → Delete account</strong>.
+                    It takes effect straight away. If you have bookings in progress, finish or cancel them first.
+                </p>
+                <p>
+                    No longer have the app? You can also ask us to delete your Petals in a Jar account at any time.
                     <a href="{{ route('support', ['topic' => 'account_deletion']) }}#contact" class="font-semibold text-ink underline">Send a deletion request</a>
                     using the phone number or email on your account. We’ll contact you there to confirm it’s really you, then delete the account within {{ $marketing['deletion_days'] }} days.
                 </p>
