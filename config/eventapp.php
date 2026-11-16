@@ -227,6 +227,32 @@ return [
         'queue' => 'default',
     ],
 
+    // "Happening near you" at the top of For You: upcoming public events with a cover.
+    'nearby_events' => [
+        // Events with a map pin count as near within this distance.
+        'radius_km' => 40,
+        // Only events starting within this many days (or already running).
+        'horizon_days' => 60,
+        'limit' => 10,
+        // Events without a pin are matched by venue city: the viewer's nearest town
+        // (within radius_km), by its name or a neighbourhood people type instead.
+        'towns' => [
+            'Accra' => ['lat' => 5.6037, 'lng' => -0.1870, 'aka' => [
+                'East Legon', 'Osu', 'Airport Residential', 'Cantonments', 'Spintex', 'Madina',
+                'Achimota', 'Dansoman', 'Labone', 'Dzorwulu', 'Adenta', 'Lapaz', 'Haatso', 'Teshie', 'Nungua',
+            ]],
+            'Tema' => ['lat' => 5.6698, 'lng' => -0.0166, 'aka' => ['Community 25', 'Sakumono']],
+            'Kasoa' => ['lat' => 5.5340, 'lng' => -0.4170, 'aka' => []],
+            'Kumasi' => ['lat' => 6.6885, 'lng' => -1.6244, 'aka' => []],
+            'Takoradi' => ['lat' => 4.8986, 'lng' => -1.7554, 'aka' => ['Sekondi', 'Sekondi-Takoradi']],
+            'Cape Coast' => ['lat' => 5.1053, 'lng' => -1.2466, 'aka' => []],
+            'Tamale' => ['lat' => 9.4008, 'lng' => -0.8393, 'aka' => []],
+            'Koforidua' => ['lat' => 6.0941, 'lng' => -0.2591, 'aka' => []],
+            'Ho' => ['lat' => 6.6008, 'lng' => 0.4713, 'aka' => []],
+            'Sunyani' => ['lat' => 7.3349, 'lng' => -2.3123, 'aka' => []],
+        ],
+    ],
+
     // Trust signals on vendor profiles, recomputed nightly (vendors:trust-signals).
     'trust' => [
         'run_at' => '02:30',

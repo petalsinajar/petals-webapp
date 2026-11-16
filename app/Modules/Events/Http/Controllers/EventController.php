@@ -8,6 +8,7 @@ use App\Modules\Events\Models\Event;
 use App\Modules\Events\Models\EventMember;
 use App\Modules\Events\Models\EventType;
 use App\Modules\Events\Services\EventInvites;
+use App\Modules\Events\Services\NearbyEvents;
 use App\Modules\Identity\Http\Resources\UserResource;
 use App\Modules\Identity\Models\User;
 use App\Modules\Media\Services\MediaLibrary;
@@ -68,6 +69,25 @@ class EventController extends Controller
             ->with('host')
             ->orderBy('starts_at')->orderBy('id')
             ->limit(20)->get();
+
+        return Paginated::manual($events, null, EventResource::class);
+    }
+
+    /**
+     * GET /v1/events/nearby?lat=&lng= — "Happening near you". Works signed out. See
+     * NearbyEvents for what counts as near.
+     */
+    public function nearby(Request $request, NearbyEvents $nearby): JsonResponse
+    {
+        $data = $request->validate([
+            'lat' => ['nullable', 'numeric', 'between:-90,90', 'required_with:lng'],
+            'lng' => ['nullable', 'numeric', 'between:-180,180', 'required_with:lat'],
+        ]);
+        $events = $nearby->for(
+            $request->user(),
+            isset($data['lat']) ? (float) $data['lat'] : null,
+            isset($data['lng']) ? (float) $data['lng'] : null,
+        );
 
         return Paginated::manual($events, null, EventResource::class);
     }

@@ -59,6 +59,7 @@ Route::middleware(['auth.optional', 'throttle:api'])->group(function () {
     Route::get('packages', [CatalogController::class, 'packages']);
     Route::get('packages/{package}', [CatalogController::class, 'package']);
     Route::get('event-types', [EventTypeController::class, 'index']);
+    Route::get('events/nearby', [EventController::class, 'nearby']);
     Route::get('vendors', [VendorController::class, 'index']);
     Route::get('vendors/{vendor}/packages', [CatalogController::class, 'vendorPackages']);
     Route::get('vendors/{vendor}', [VendorController::class, 'show']);
