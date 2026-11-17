@@ -54,7 +54,13 @@ class ItemResource extends Resource
 
     public static function form(Schema $schema): Schema
     {
-        return $schema->components([
+        return $schema->components(self::formComponents());
+    }
+
+    /** Also used by the admin panel's inventory, which adds a vendor picker on top. */
+    public static function formComponents(): array
+    {
+        return [
             Section::make('Item')->columns(2)->schema([
                 TextInput::make('title')->required()->maxLength(120),
                 Select::make('category_id')->label('Category')->required()
@@ -77,7 +83,8 @@ class ItemResource extends Resource
                         TextInput::make('min_qty')->label('From quantity')->integer()->minValue(1)->default(1)->required(),
                         TextInput::make('price_minor')->label('Unit price')->integer()->minValue(0)->required(),
                     ]),
-                TextInput::make('damage_deposit_minor')->label('Damage deposit per unit')->integer()->minValue(0)->default(0),
+                TextInput::make('damage_deposit_minor')->label('Damage deposit per unit')->integer()->minValue(0)->default(0)
+                    ->dehydrateStateUsing(fn ($state) => $state ?? 0), // blank means no deposit
                 Toggle::make('instant_book')->label('Instant book (no approval needed)'),
                 Toggle::make('requires_setup'),
             ]),
@@ -93,8 +100,7 @@ class ItemResource extends Resource
                         Toggle::make('active')->default(true),
                     ]),
             ]),
-
-        ]);
+        ];
     }
 
     public static function table(Table $table): Table
@@ -115,17 +121,21 @@ class ItemResource extends Resource
             ])
             ->modifyQueryUsing(fn ($query) => $query->with('variants'))
             ->recordActions([
-                EditAction::make()->after(function (Item $record) {
-                    $warnings = app(CapacityWarnings::class)->pull($record->id);
-                    if ($warnings !== []) {
-                        $days = collect($warnings)->flatMap(fn (array $w) => $w['days'])->unique()->sort()->implode(', ');
-                        Notification::make()->warning()->persistent()
-                            ->title('More units are already booked than you now have')
-                            ->body("Check these days: {$days}.")
-                            ->send();
-                    }
-                }),
+                EditAction::make()->after(fn (Item $record) => self::warnAboutCapacity($record)),
             ]);
+    }
+
+    /** After an edit: lowered stock below what's already booked on some days. */
+    public static function warnAboutCapacity(Item $record): void
+    {
+        $warnings = app(CapacityWarnings::class)->pull($record->id);
+        if ($warnings !== []) {
+            $days = collect($warnings)->flatMap(fn (array $w) => $w['days'])->unique()->sort()->implode(', ');
+            Notification::make()->warning()->persistent()
+                ->title('More units are already booked than you now have')
+                ->body("Check these days: {$days}.")
+                ->send();
+        }
     }
 
     public static function getPages(): array

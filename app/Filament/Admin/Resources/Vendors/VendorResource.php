@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Resources\Vendors;
 
+use App\Filament\Admin\Resources\Items\ItemResource;
 use App\Filament\Admin\Resources\Vendors\Pages\ManageVendors;
 use App\Modules\Identity\Models\Vendor;
 use BackedEnum;
@@ -50,6 +51,7 @@ class VendorResource extends Resource
                     'verified' => 'success', 'rejected' => 'danger', default => 'warning',
                 }),
                 TextColumn::make('status')->badge(),
+                TextColumn::make('items_count')->label('Items')->counts('items')->sortable(),
                 TextColumn::make('followers_count')->label('Followers')->numeric()->sortable(),
                 TextColumn::make('completed_bookings_count')->label('Completed')->numeric()->sortable(),
                 TextColumn::make('created_at')->since()->sortable(),
@@ -69,6 +71,9 @@ class VendorResource extends Resource
                         $record->forceFill(['verification_status' => 'verified', 'verified_at' => now()])->save();
                         Notification::make()->title("{$record->name} is verified")->success()->send();
                     }),
+                Action::make('inventory')
+                    ->icon(Heroicon::OutlinedCube)
+                    ->url(fn (Vendor $record) => ItemResource::getUrl('index', ['filters' => ['vendor' => ['value' => $record->id]]])),
                 EditAction::make(),
             ]);
     }
