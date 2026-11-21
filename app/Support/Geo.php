@@ -79,6 +79,32 @@ final class Geo
         return $query->orderByRaw(self::haversineSql().$boost, [$lat, $lat, $lng]);
     }
 
+    /**
+     * Keep rows whose own lat/lng columns are within $km of the point (users, events).
+     * A bounding box first, then the exact haversine distance, on every driver: these
+     * tables have no PostGIS column.
+     *
+     * @template T of Builder
+     *
+     * @param  T  $query
+     * @return T
+     */
+    public static function withinKm(Builder $query, string $latColumn, string $lngColumn, float $lat, float $lng, float $km): Builder
+    {
+        $kmPerLngDegree = max(0.01, self::KM_PER_DEGREE * cos(deg2rad($lat)));
+        $haversine = '('.self::EARTH_KM.' * 2 * asin(sqrt('
+            ."power(sin(radians({$latColumn} - ?) / 2), 2)"
+            ." + cos(radians(?)) * cos(radians({$latColumn})) * power(sin(radians({$lngColumn} - ?) / 2), 2)"
+            .')))';
+
+        return $query
+            ->whereNotNull($latColumn)
+            ->whereNotNull($lngColumn)
+            ->whereBetween($latColumn, [$lat - $km / self::KM_PER_DEGREE, $lat + $km / self::KM_PER_DEGREE])
+            ->whereBetween($lngColumn, [$lng - $km / $kmPerLngDegree, $lng + $km / $kmPerLngDegree])
+            ->whereRaw("{$haversine} <= ?", [$lat, $lat, $lng, $km]);
+    }
+
     /** Distance in km from vendors.base_lat/base_lng; bindings: lat, lat, lng. */
     private static function haversineSql(): string
     {

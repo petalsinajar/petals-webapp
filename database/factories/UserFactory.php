@@ -37,9 +37,14 @@ class UserFactory extends Factory
         });
     }
 
-    public function admin(): static
+    public function admin(array $permissions = []): static
     {
         return $this->state(fn () => ['email' => fake()->unique()->safeEmail(), 'password' => 'password'])
-            ->afterCreating(fn (User $user) => $user->forceFill(['is_admin' => true])->save());
+            ->afterCreating(fn (User $user) => $user->forceFill(['is_admin' => true, 'admin_permissions' => $permissions ?: null])->save());
+    }
+
+    public function superAdmin(): static
+    {
+        return $this->admin()->afterCreating(fn (User $user) => $user->forceFill(['is_super_admin' => true])->save());
     }
 }

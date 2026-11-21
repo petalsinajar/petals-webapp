@@ -24,6 +24,9 @@ return new class extends Migration
             $table->decimal('lat', 10, 7)->nullable();
             $table->decimal('lng', 10, 7)->nullable();
             $table->boolean('is_admin')->default(false);
+            // Super admins have every admin permission and approve large campaigns.
+            $table->boolean('is_super_admin')->default(false);
+            $table->json('admin_permissions')->nullable(); // ["campaigns"]
             $table->boolean('is_private')->default(false);
             $table->json('settings')->nullable();
             $table->unsignedInteger('followers_count')->default(0);

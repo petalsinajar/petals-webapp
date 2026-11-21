@@ -23,6 +23,10 @@ Schedule::command('recommendations:run')
     ->timezone(config('eventapp.business_timezone'))
     ->withoutOverlapping()->onOneServer();
 
+// Admin campaigns that are due, and the lifecycle automations (both queue on "campaigns").
+Schedule::command('campaigns:dispatch')->everyMinute()->withoutOverlapping()->onOneServer();
+Schedule::command('campaigns:automations')->hourly()->withoutOverlapping()->onOneServer();
+
 // Double-blind reviews past their window are published; reminders to review completed bookings.
 Schedule::command('reviews:sweep')->hourly()->withoutOverlapping()->onOneServer();
 

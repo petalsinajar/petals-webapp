@@ -2,6 +2,9 @@
 
 use App\Modules\Bookings\Http\Controllers\BookingController;
 use App\Modules\Bookings\Http\Controllers\CheckoutController;
+use App\Modules\Campaigns\Http\Controllers\CampaignTrackingController;
+use App\Modules\Campaigns\Http\Controllers\NotificationPreferenceController;
+use App\Modules\Campaigns\Http\Controllers\SmsWebhookController;
 use App\Modules\Catalog\Http\Controllers\CatalogController;
 use App\Modules\Catalog\Http\Controllers\VendorInventoryController;
 use App\Modules\Events\Http\Controllers\EventController;
@@ -41,6 +44,9 @@ Route::post('auth/refresh', [AuthController::class, 'refresh'])->middleware('thr
 
 Route::post('webhooks/payments', PaymentWebhookController::class);
 Route::post('webhooks/video', VideoWebhookController::class);
+// Campaign SMS: delivery reports and replies (STOP), with ?token=SMS_WEBHOOK_TOKEN.
+Route::post('webhooks/sms/delivery', [SmsWebhookController::class, 'delivery']);
+Route::post('webhooks/sms/inbound', [SmsWebhookController::class, 'inbound']);
 
 if (app()->environment(['local', 'testing'])) {
     Route::post('dev/payments/{payment}/succeed', [PaymentWebhookController::class, 'devSucceed']);
@@ -190,4 +196,9 @@ Route::middleware(['auth:sanctum', 'abilities:access', 'active', 'throttle:api']
 
     Route::get('notifications', [NotificationController::class, 'index']);
     Route::post('notifications/read', [NotificationController::class, 'markRead']);
+
+    // Campaigns: what the user wants to get, and opens/taps on what they got.
+    Route::get('me/notification-preferences', [NotificationPreferenceController::class, 'show']);
+    Route::put('me/notification-preferences', [NotificationPreferenceController::class, 'update']);
+    Route::post('campaigns/{recipient}/opened', [CampaignTrackingController::class, 'opened'])->whereUlid('recipient');
 });

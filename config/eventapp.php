@@ -340,4 +340,66 @@ return [
             'X' => 'https://x.com/petalsinajar',
         ],
     ],
+
+    // Admin campaigns: push, SMS and in-app messages to saved audiences (app/Modules/Campaigns).
+    // Booking alerts are transactional and never go through here.
+    'campaigns' => [
+        'queue' => 'campaigns',
+        // log | cbmessaging | fake (the SMS account is eventapp.sms.cbmessaging), onesignal | fake.
+        'sms_driver' => env('CAMPAIGN_SMS_DRIVER', env('SMS_DRIVER', 'log')),
+        'push_driver' => env('CAMPAIGN_PUSH_DRIVER', 'onesignal'),
+        'channels' => ['push' => 'Push', 'sms' => 'SMS', 'in_app' => 'In-app'],
+        'categories' => [
+            'promotions' => 'Promotions',
+            'product_updates' => 'Product updates',
+            'social' => 'Social',
+            'suggestions' => 'Suggestions',
+        ],
+        // Frequency caps and the SMS opt-out line apply to these. Every category is marketing today.
+        'marketing_categories' => ['promotions', 'product_updates', 'social', 'suggestions'],
+        // Per user, across all marketing campaigns and channels (one campaign counts once).
+        'frequency_caps' => ['per_day' => 1, 'per_week' => 3],
+
+        // Ghana is one timezone; scheduling and quiet hours use it. Quiet hours may wrap midnight.
+        'audience_timezone' => env('CAMPAIGNS_TIMEZONE', env('BUSINESS_TIMEZONE', 'Africa/Accra')),
+        'quiet_hours' => ['start' => '21:00', 'end' => '08:00'],
+
+        // Throttling: recipients per minute per channel, and users per push request (OneSignal).
+        'rate_per_minute' => ['push' => 6000, 'sms' => 600, 'in_app' => 20000],
+        'push_batch_size' => 500,
+        'tries' => 3,
+
+        // A second admin (a super admin) approves a send above either limit.
+        'approval' => ['audience_over' => 5000, 'sms_over' => 500],
+
+        'sms' => [
+            // Per message segment, in minor units (pesewas).
+            'cost_per_segment_minor' => (int) env('CAMPAIGN_SMS_SEGMENT_COST_MINOR', 4),
+            'opt_out_line' => 'Reply STOP to opt out.',
+            // Inbound replies (provider webhook) that opt the number out, case-insensitive.
+            'stop_words' => ['STOP', 'UNSUBSCRIBE', 'STOPALL', 'END', 'QUIT', 'CANCEL'],
+            // Shared secret the SMS provider adds to webhook URLs as ?token=.
+            'webhook_token' => env('SMS_WEBHOOK_TOKEN'),
+        ],
+
+        // In-app paths the mobile app opens (go_router routes). {id} is the target's id.
+        'deep_links' => [
+            'event' => ['label' => 'Event', 'path' => '/events/{id}', 'needs_id' => true],
+            'post' => ['label' => 'Post', 'path' => '/posts/{id}', 'needs_id' => true],
+            'vendor' => ['label' => 'Vendor', 'path' => '/vendors/{id}', 'needs_id' => true],
+            'item' => ['label' => 'Item', 'path' => '/items/{id}', 'needs_id' => true],
+            'discover' => ['label' => 'Discover', 'path' => '/discover', 'needs_id' => false],
+            'create_event' => ['label' => 'Create event', 'path' => '/events/new', 'needs_id' => false],
+        ],
+
+        // Lifecycle automations (campaigns with an `automation` key; switched on in Filament).
+        'automations' => [
+            'run_every_minutes' => 60,
+            'welcome_days' => ['welcome_day_0' => 0, 'welcome_day_1' => 1, 'welcome_day_3' => 3, 'welcome_day_7' => 7],
+            'countdown_days' => [7, 3, 1],
+            'inactive' => ['inactive_14d_push' => 14, 'inactive_30d_sms' => 30],
+            // ISO day of the week the vendor summary goes out (1 = Monday).
+            'vendor_summary_day' => 1,
+        ],
+    ],
 ];

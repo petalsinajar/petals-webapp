@@ -23,8 +23,9 @@ app/
     Media/      direct uploads to R2 / Cloudflare Stream, image renditions, moderation hook, cleanup
     Reviews/    verified two-way reviews of completed bookings: double-blind, replies, reports
     Subscriptions/  vendor plans: limits, features, trial, billing (Paystack), featured weeks, analytics
+    Campaigns/  admin push, SMS and in-app campaigns: audiences, approval, caps, quiet hours, automations, reports
   Filament/
-    Admin/      users, vendor verification, bookings & disputes, post and review moderation
+    Admin/      users, vendor verification, bookings & disputes, post and review moderation, campaigns
     Vendor/     inventory with variants, booking schedule with accept/decline/dispatch/return
   Support/      Money (minor units), Actor (user|vendor), PhoneNumber, Paginated, Geo (service areas)
 ```
@@ -74,6 +75,7 @@ pending_vendor → accepted → confirmed → out_for_delivery → delivered →
 | Plans | `plans`, `vendors/{id}/subscription` (+ `/trial`, `/checkout`, `/cancel`, `/resume`, `/auto-renew`), `vendors/{id}/featured-credits/{credit}/use`, `vendors/{id}/analytics?days=` |
 | Reviews | `POST/GET bookings/{id}/reviews`, `PATCH reviews/{id}`, `POST reviews/{id}/reply`, `POST reviews/{id}/report`, `vendors/{id}/reviews?sort=recent\|highest\|lowest&rating=&with_photos=`, `items/{id}/reviews`, `customers/{id}/vendor-reviews` |
 | Social | `feed/following`, `feed/discover?event_type=`, `posts`, `posts/{id}/reaction`, `posts/{id}/comments`, `posts/{id}/shop-taps`, `follows`, `notifications` |
+| Campaigns | `GET/PUT me/notification-preferences`, `POST campaigns/{recipient_id or campaign_id}/opened { clicked? }`, `POST webhooks/sms/delivery`, `POST webhooks/sms/inbound` (STOP) |
 
 ## Uploads
 

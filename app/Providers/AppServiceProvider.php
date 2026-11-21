@@ -5,6 +5,14 @@ namespace App\Providers;
 use App\Modules\Bookings\Events\BookingCreated;
 use App\Modules\Bookings\Models\Booking;
 use App\Modules\Bookings\Policies\BookingPolicy;
+use App\Modules\Campaigns\Channels\CbMessagingSmsProvider;
+use App\Modules\Campaigns\Channels\FakePushProvider;
+use App\Modules\Campaigns\Channels\FakeSmsProvider;
+use App\Modules\Campaigns\Channels\LogSmsProvider;
+use App\Modules\Campaigns\Channels\OneSignalPushProvider;
+use App\Modules\Campaigns\Contracts\PushProvider;
+use App\Modules\Campaigns\Contracts\SmsProvider;
+use App\Modules\Campaigns\Models\Campaign;
 use App\Modules\Catalog\Availability\AvailabilityStore;
 use App\Modules\Catalog\Availability\SqlAvailabilityStore;
 use App\Modules\Catalog\Contracts\CatalogReader;
@@ -87,6 +95,17 @@ class AppServiceProvider extends ServiceProvider
             'cbmessaging' => CbMessagingSmsSender::fromConfig(),
             default => new LogSmsSender,
         });
+
+        // Campaigns: the same SMS account as OTPs and the same OneSignal app as notifications.
+        // The test suite uses the fakes (phpunit.xml).
+        $this->app->singleton(SmsProvider::class, fn () => match (config('eventapp.campaigns.sms_driver')) {
+            'cbmessaging' => CbMessagingSmsProvider::fromConfig(),
+            'fake' => new FakeSmsProvider,
+            default => new LogSmsProvider,
+        });
+        $this->app->singleton(PushProvider::class, fn () => config('eventapp.campaigns.push_driver') === 'fake'
+            ? new FakePushProvider
+            : new OneSignalPushProvider);
     }
 
     public function boot(): void
@@ -101,6 +120,7 @@ class AppServiceProvider extends ServiceProvider
             'item' => Item::class,
             'package' => Package::class,
             'review' => Review::class,
+            'campaign' => Campaign::class,
         ]);
 
         // Single objects are returned as-is; lists use { data, next_cursor }.

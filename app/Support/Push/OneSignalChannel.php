@@ -75,10 +75,35 @@ class OneSignalChannel
     public function post(string $userId, PushMessage $message, string $type = 'test'): ?Response
     {
         $config = config('eventapp.push.onesignal');
-        $payload = [
+
+        try {
+            return Http::baseUrl($config['url'])
+                ->withHeaders(['Authorization' => self::authorization((string) $config['rest_api_key'])])
+                ->acceptJson()
+                ->timeout(10)
+                ->post('notifications', self::payload([$userId], $message, $type));
+        } catch (ConnectionException $e) {
+            Log::warning('OneSignal unreachable', ['user' => $userId, 'error' => $e->getMessage()]);
+
+            return null;
+        }
+    }
+
+    /**
+     * The `POST notifications` body for one message to every device of $userIds
+     * (OneSignal external ids; campaigns send up to eventapp.campaigns.push_batch_size).
+     *
+     * @param  list<string>  $userIds
+     * @return array<string, mixed>
+     */
+    public static function payload(array $userIds, PushMessage $message, string $type): array
+    {
+        $config = config('eventapp.push.onesignal');
+
+        return [
             'app_id' => $config['app_id'],
             'target_channel' => 'push',
-            'include_aliases' => ['external_id' => [$userId]],
+            'include_aliases' => ['external_id' => array_values($userIds)],
             'headings' => ['en' => $message->title],
             'contents' => ['en' => $message->body],
             'data' => array_filter([
@@ -88,19 +113,8 @@ class OneSignalChannel
             ], fn ($value) => $value !== null),
             // Customers get the app's default look.
             ...($message->forBusiness ? self::businessLook($config) : []),
+            ...($message->imageUrl ? ['big_picture' => $message->imageUrl, 'ios_attachments' => ['image' => $message->imageUrl]] : []),
         ];
-
-        try {
-            return Http::baseUrl($config['url'])
-                ->withHeaders(['Authorization' => self::authorization((string) $config['rest_api_key'])])
-                ->acceptJson()
-                ->timeout(10)
-                ->post('notifications', $payload);
-        } catch (ConnectionException $e) {
-            Log::warning('OneSignal unreachable', ['user' => $userId, 'error' => $e->getMessage()]);
-
-            return null;
-        }
     }
 
     /**

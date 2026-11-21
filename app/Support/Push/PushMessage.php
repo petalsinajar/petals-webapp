@@ -6,7 +6,8 @@ namespace App\Support\Push;
  * What a push notification says. [route] is an in-app path the mobile app
  * opens when the push is tapped (e.g. `/events/{id}`); null just opens the app.
  * Only send routes the app has a screen for. [forBusiness] marks pushes to a
- * vendor's team, which show the logo in the vendor colors on Android.
+ * vendor's team, which show the logo in the vendor colors on Android. [imageUrl] is a
+ * large picture shown with the push (campaigns).
  */
 final class PushMessage
 {
@@ -17,5 +18,6 @@ final class PushMessage
         public readonly ?string $route = null,
         public readonly array $data = [],
         public readonly bool $forBusiness = false,
+        public readonly ?string $imageUrl = null,
     ) {}
 }

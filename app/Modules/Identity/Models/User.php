@@ -40,6 +40,7 @@ class User extends Authenticatable implements FilamentUser, HasAvatar, HasName, 
     protected $attributes = [
         'status' => 'active',
         'is_admin' => false,
+        'is_super_admin' => false,
         'is_private' => false,
         'followers_count' => 0,
         'following_count' => 0,
@@ -54,6 +55,8 @@ class User extends Authenticatable implements FilamentUser, HasAvatar, HasName, 
             'birthday' => 'date',
             'password' => 'hashed',
             'is_admin' => 'boolean',
+            'is_super_admin' => 'boolean',
+            'admin_permissions' => 'array',
             'is_private' => 'boolean',
             'settings' => 'array',
             'lat' => 'float',
@@ -117,6 +120,18 @@ class User extends Authenticatable implements FilamentUser, HasAvatar, HasName, 
         // in config('eventapp.business_timezone')). Decide what a 29 February birthday does in
         // non-leap years.
         return null;
+    }
+
+    /** Every admin permission, and approves large campaigns. */
+    public function isSuperAdmin(): bool
+    {
+        return $this->is_admin && $this->is_super_admin;
+    }
+
+    /** An admin allowed into one area of the admin panel (e.g. "campaigns"). */
+    public function hasAdminPermission(string $permission): bool
+    {
+        return $this->is_admin && ($this->is_super_admin || in_array($permission, $this->admin_permissions ?? [], true));
     }
 
     public function isActive(): bool

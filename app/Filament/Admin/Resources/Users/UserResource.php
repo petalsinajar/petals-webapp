@@ -7,6 +7,7 @@ use App\Modules\Identity\Models\User;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -17,6 +18,7 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\Auth;
 
 class UserResource extends Resource
 {
@@ -26,6 +28,9 @@ class UserResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'display_name';
 
+    /** Admin areas a super admin can grant. */
+    public const ADMIN_PERMISSIONS = ['campaigns' => 'Campaigns'];
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
@@ -33,6 +38,13 @@ class UserResource extends Resource
             TextInput::make('email')->email()->maxLength(255),
             Select::make('status')->options(['active' => 'Active', 'suspended' => 'Suspended'])->required(),
             Toggle::make('is_admin')->label('Platform admin'),
+            // Only super admins hand out admin areas (hidden fields aren't saved).
+            CheckboxList::make('admin_permissions')->label('Admin areas')
+                ->options(self::ADMIN_PERMISSIONS)
+                ->visible(fn () => Auth::user()?->isSuperAdmin()),
+            Toggle::make('is_super_admin')->label('Super admin')
+                ->helperText('Every admin area, and approves large campaigns.')
+                ->visible(fn () => Auth::user()?->isSuperAdmin()),
         ]);
     }
 

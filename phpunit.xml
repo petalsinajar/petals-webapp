@@ -32,6 +32,9 @@
         <env name="MEDIA_STORAGE" value="fake"/>
         <env name="MEDIA_CDN_URL" value="https://cdn.test"/>
         <env name="VIDEO_PROVIDER" value="fake"/>
+        <env name="CAMPAIGN_SMS_DRIVER" value="fake"/>
+        <env name="CAMPAIGN_PUSH_DRIVER" value="fake"/>
+        <env name="SMS_WEBHOOK_TOKEN" value="test-sms-token"/>
         <env name="CLOUDFLARE_STREAM_WEBHOOK_SECRET" value="test-webhook-secret"/>
         <env name="CLOUDFLARE_STREAM_DELIVERY_URL" value="https://stream.test"/>
         <env name="IN_APP_PAYMENTS" value="true"/>
