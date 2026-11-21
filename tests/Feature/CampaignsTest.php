@@ -360,6 +360,39 @@ class CampaignsTest extends TestCase
         $this->assertSame(CampaignStatus::Sent, $campaign->fresh()->status);
     }
 
+    public function test_editing_the_audience_after_submitting_changes_nothing(): void
+    {
+        config(['eventapp.campaigns.approval' => ['audience_over' => 1, 'sms_over' => 100]]);
+        $first = $this->person();
+        $others = [$this->person(), $this->person()];
+        $campaign = $this->service()->submit($this->campaign([], ['user_ids' => [$first->id]]), $this->author, CarbonImmutable::parse('2026-11-23 15:00:00'));
+        $this->assertSame(CampaignStatus::Scheduled, $campaign->status, 'one person: no approval');
+
+        // Widened after submitting: the send still goes to the audience that was submitted.
+        $campaign->segment->update(['filters' => ['user_ids' => [$first->id, ...array_map(fn ($u) => $u->id, $others)]]]);
+        $this->travelTo(CarbonImmutable::parse('2026-11-23 15:00:00'));
+        $this->artisan('campaigns:dispatch');
+
+        $this->assertSame([$first->id], $this->push()->recipients());
+    }
+
+    public function test_an_unapproved_repeating_send_that_grows_past_the_limit_waits_for_approval(): void
+    {
+        config(['eventapp.campaigns.approval' => ['audience_over' => 1, 'sms_over' => 100]]);
+        $this->person(['city' => 'Ho']);
+        $campaign = $this->service()->submit($this->campaign(['recurrence' => 'daily'], ['city' => 'Ho']), $this->author, CarbonImmutable::parse('2026-11-23 15:00:00'));
+        $this->assertSame(CampaignStatus::Scheduled, $campaign->status);
+
+        $this->person(['city' => 'Ho']); // a new sign-up matches the same filters
+        $this->travelTo(CarbonImmutable::parse('2026-11-23 15:00:00'));
+        $this->artisan('campaigns:dispatch');
+
+        $campaign->refresh();
+        $this->assertSame(CampaignStatus::PendingApproval, $campaign->status);
+        $this->assertSame(2, $campaign->audience_count);
+        $this->assertSame([], $this->push()->sent);
+    }
+
     public function test_any_sms_send_over_its_limit_needs_approval(): void
     {
         config(['eventapp.campaigns.approval' => ['audience_over' => 1000, 'sms_over' => 1]]);

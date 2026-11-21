@@ -5,8 +5,10 @@ namespace App\Modules\Campaigns\Models;
 use App\Modules\Campaigns\Enums\CampaignStatus;
 use App\Modules\Campaigns\Enums\Channel;
 use App\Modules\Campaigns\Enums\Recurrence;
+use App\Modules\Campaigns\Services\SegmentQuery;
 use App\Modules\Identity\Models\User;
 use App\Modules\Media\Models\Media;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -42,6 +44,7 @@ class Campaign extends Model
             'recurrence' => Recurrence::class,
             'channels' => 'array',
             'deep_link' => 'array',
+            'audience_filters' => 'array',
             'active' => 'boolean',
             'requires_approval' => 'boolean',
             'scheduled_at' => 'immutable_datetime',
@@ -69,6 +72,19 @@ class Campaign extends Model
     public function isAutomation(): bool
     {
         return $this->automation !== null;
+    }
+
+    /**
+     * Who the campaign reaches: the filters frozen at submit, or the segment's current ones
+     * while it's still a draft. Null when there's no audience (automations).
+     *
+     * @return ?Builder<User>
+     */
+    public function audience(): ?Builder
+    {
+        $filters = $this->audience_filters ?? $this->segment?->filters;
+
+        return $filters === null && $this->segment === null ? null : SegmentQuery::users($filters ?? []);
     }
 
     /** @return BelongsTo<CampaignSegment, $this> */

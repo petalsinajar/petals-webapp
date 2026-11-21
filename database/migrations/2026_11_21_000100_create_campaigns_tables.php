@@ -37,6 +37,9 @@ return new class extends Migration
             $table->json('deep_link')->nullable();         // { type: event|post|vendor|item|discover|create_event, id? }
             $table->foreignUlid('image_media_id')->nullable()->constrained('media')->nullOnDelete();
             $table->foreignUlid('segment_id')->nullable()->constrained('campaign_segments')->nullOnDelete();
+            // The segment's filters as submitted (and approved): sends use these, so editing the
+            // segment afterwards can't change who a submitted campaign reaches.
+            $table->json('audience_filters')->nullable();
             $table->timestamp('scheduled_at')->nullable();
             $table->string('recurrence', 10)->nullable(); // daily | weekly (digests)
             $table->boolean('requires_approval')->default(false);

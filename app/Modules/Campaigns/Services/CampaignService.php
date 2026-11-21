@@ -66,8 +66,8 @@ class CampaignService
         $reachable = array_fill_keys($campaign->channels ?? [], 0);
         $audience = 0;
 
-        if ($campaign->segment) {
-            $campaign->segment->users()->select('users.id')->chunkById(1000, function ($chunk) use ($campaign, &$reachable, &$audience) {
+        if ($people = $campaign->audience()) {
+            $people->select('users.id')->chunkById(1000, function ($chunk) use ($campaign, &$reachable, &$audience) {
                 $ids = $chunk->pluck('id')->all();
                 $audience += count($ids);
                 $users = Eligibility::loadUsers($ids);
@@ -119,6 +119,8 @@ class CampaignService
             }
         }
 
+        // Freeze the audience: what's estimated (and approved) is what's sent.
+        $campaign->audience_filters = $campaign->segment?->filters ?? [];
         $estimate = $this->estimate($campaign);
         $campaign->forceFill([
             'audience_count' => $estimate['audience'],
@@ -167,7 +169,7 @@ class CampaignService
         if (! in_array($campaign->status, [CampaignStatus::PendingApproval, CampaignStatus::Scheduled], true)) {
             throw ValidationException::withMessages(['status' => 'Only a scheduled or pending campaign can go back to draft.']);
         }
-        $campaign->forceFill(['status' => CampaignStatus::Draft, 'approved_by' => null, 'approved_at' => null, 'requires_approval' => false])->save();
+        $campaign->forceFill(['status' => CampaignStatus::Draft, 'approved_by' => null, 'approved_at' => null, 'requires_approval' => false, 'audience_filters' => null])->save();
 
         return $campaign;
     }
@@ -203,14 +205,28 @@ class CampaignService
             return SendWindow::nextAllowed($now);
         }
 
+        // The frozen filters can still match more people over time (new sign-ups, repeats):
+        // a send that has grown past the limits without an approval waits for one.
+        if ($campaign->approved_by === null && ! $campaign->isAutomation()) {
+            $estimate = $this->estimate($campaign);
+            if (self::needsApproval($estimate)) {
+                $campaign->forceFill([
+                    'status' => CampaignStatus::PendingApproval,
+                    'requires_approval' => true,
+                    'audience_count' => $estimate['audience'],
+                    'estimated_sms_cost_minor' => $estimate['sms_cost_minor'],
+                ])->save();
+
+                return null;
+            }
+        }
+
         $runKey = $campaign->recurrence
             ? $campaign->scheduled_at->setTimezone(SendWindow::timezone())->toDateString()
             : '';
 
-        $members = $campaign->segment
-            ? $campaign->segment->users()->select('users.id')->lazyById(1000, 'users.id', 'id')
-                ->map(fn ($u) => new AudienceMember($u->id, $runKey))
-            : [];
+        $members = $campaign->audience()?->select('users.id')->lazyById(1000, 'users.id', 'id')
+            ->map(fn ($u) => new AudienceMember($u->id, $runKey)) ?? [];
 
         $this->dispatcher->run($campaign, $members, $now);
 
