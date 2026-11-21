@@ -57,10 +57,13 @@ class MeController extends Controller
             'avatar_media_id' => ['sometimes', 'nullable', 'ulid'], // a ready image from POST /v1/uploads
             'bio' => ['sometimes', 'nullable', 'string', 'max:300'],
             'city' => ['sometimes', 'nullable', 'string', 'max:80'],
+            // A birth date, not an event date: it is only checked for a plausible age. The
+            // yearly occurrence comes from User::nextBirthday(). Defaults guard a stale config
+            // cache, where a null would turn these into "after today".
             'birthday' => [
                 'sometimes', 'nullable', 'date_format:Y-m-d',
-                'before_or_equal:'.now()->subYears(config('eventapp.profile.min_age_years'))->toDateString(),
-                'after:'.now()->subYears(config('eventapp.profile.max_age_years'))->toDateString(),
+                'before_or_equal:'.now()->subYears((int) config('eventapp.profile.min_age_years', 13))->toDateString(),
+                'after:'.now()->subYears((int) config('eventapp.profile.max_age_years', 120))->toDateString(),
             ],
             'lat' => ['sometimes', 'nullable', 'numeric', 'between:-90,90'],
             'lng' => ['sometimes', 'nullable', 'numeric', 'between:-180,180'],
