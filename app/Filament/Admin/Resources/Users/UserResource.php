@@ -75,7 +75,10 @@ class UserResource extends Resource
                         $record->forceFill(['status' => 'suspended'])->save();
                         $record->tokens()->delete(); // signs them out everywhere
                     }),
-                EditAction::make(),
+                // Status and admin fields aren't mass-assignable (the API must never set them):
+                // save exactly what the form sends. Hidden fields (permissions, for non-super
+                // admins) aren't sent.
+                EditAction::make()->using(fn (User $record, array $data) => tap($record)->forceFill($data)->save()),
             ]);
     }
 

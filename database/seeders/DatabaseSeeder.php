@@ -15,12 +15,22 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // Admin dashboard: /admin  (admin@eventapp.test / password)
-        User::factory()->admin()->create([
+        // Admin dashboard: /admin  (admin@eventapp.test / password). A super admin: every admin
+        // area, grants permissions, approves large campaigns.
+        User::factory()->superAdmin()->create([
             'handle' => 'admin.team',
             'display_name' => 'Petalsinajar Admin',
             'phone' => '+233200000001',
             'email' => 'admin@eventapp.test',
+        ]);
+
+        // An admin who can only write and send campaigns (campaigns@eventapp.test / password).
+        // Large sends they submit wait for the super admin above to approve.
+        User::factory()->admin(['campaigns'])->create([
+            'handle' => 'campaigns.team',
+            'display_name' => 'Campaigns Admin',
+            'phone' => '+233200000004',
+            'email' => 'campaigns@eventapp.test',
         ]);
 
         // A vendor owner you can sign in as from the app (OTP 123456 locally),

@@ -2,9 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Admin\Resources\Users\Pages\ManageUsers;
 use App\Modules\Identity\Models\User;
 use App\Modules\Identity\Models\Vendor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 /** The Filament dashboards boot and enforce who can see them. */
@@ -20,6 +22,49 @@ class PanelsTest extends TestCase
         foreach (['/admin', '/admin/users', '/admin/vendors', '/admin/bookings', '/admin/posts', '/admin/reviews', '/admin/event-types', '/admin/plans', '/admin/subscriptions', '/admin/support-requests', '/admin/items'] as $url) {
             $this->get($url)->assertOk();
         }
+    }
+
+    public function test_the_seeded_admin_is_a_super_admin_who_sees_campaigns(): void
+    {
+        $this->seed();
+        $admin = User::where('email', 'admin@eventapp.test')->firstOrFail();
+
+        $this->assertTrue($admin->isSuperAdmin());
+        $this->actingAs($admin)->get('/admin/campaigns')->assertOk();
+    }
+
+    public function test_the_seeded_campaigns_admin_sees_campaigns_only(): void
+    {
+        $this->seed();
+        $admin = User::where('email', 'campaigns@eventapp.test')->firstOrFail();
+
+        $this->assertFalse($admin->isSuperAdmin());
+        $this->actingAs($admin)->get('/admin/campaigns')->assertOk();
+    }
+
+    public function test_super_admins_grant_admin_areas_on_the_users_screen(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs(User::factory()->superAdmin()->create());
+
+        Livewire::test(ManageUsers::class)
+            ->callTableAction('edit', $user, data: ['is_admin' => true, 'admin_permissions' => ['campaigns']])
+            ->assertHasNoTableActionErrors();
+
+        $this->assertTrue($user->fresh()->hasAdminPermission('campaigns'));
+        $this->assertFalse($user->fresh()->isSuperAdmin());
+    }
+
+    public function test_other_admins_cannot_grant_admin_areas(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs(User::factory()->admin(['campaigns'])->create());
+
+        Livewire::test(ManageUsers::class)
+            ->callTableAction('edit', $user, data: ['is_admin' => true, 'admin_permissions' => ['campaigns'], 'is_super_admin' => true]);
+
+        $this->assertNull($user->fresh()->admin_permissions);
+        $this->assertFalse($user->fresh()->is_super_admin);
     }
 
     public function test_non_admins_cannot_open_the_admin_panel(): void

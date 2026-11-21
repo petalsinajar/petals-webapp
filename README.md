@@ -150,7 +150,8 @@ Seeded logins (local only; OTP is always `123456` and no SMS is sent):
 
 | Who | App (phone) | Dashboard |
 | --- | --- | --- |
-| Platform admin | +233200000001 | `/admin` — admin@eventapp.test / password |
+| Platform admin (super admin) | +233200000001 | `/admin` — admin@eventapp.test / password |
+| Campaigns admin (campaigns only) | +233200000004 | `/admin` — campaigns@eventapp.test / password |
 | Vendor owner (Royal Canopies) | +233200000002 | `/vendor` — vendor@eventapp.test / password |
 | Host with a wedding | +233200000003 | — |
 
