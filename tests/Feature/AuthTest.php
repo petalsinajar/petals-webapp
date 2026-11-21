@@ -69,6 +69,24 @@ class AuthTest extends TestCase
         $this->assertDatabaseHas('handles', ['handle' => 'taken.name', 'owner_id' => $other->id]);
     }
 
+    public function test_users_are_asked_for_a_birthday_until_they_add_one(): void
+    {
+        $user = $this->signIn();
+        $this->getJson('/v1/me')->assertOk()->assertJson(['needs_birthday' => true, 'birthday' => null]);
+
+        $tooYoung = now()->subYears(config('eventapp.profile.min_age_years'))->addDay()->toDateString();
+        $this->patchJson('/v1/me', ['birthday' => $tooYoung])->assertStatus(422)->assertJsonValidationErrors('birthday');
+        $this->patchJson('/v1/me', ['birthday' => now()->addDay()->toDateString()])->assertStatus(422)->assertJsonValidationErrors('birthday');
+        $this->patchJson('/v1/me', ['birthday' => '1800-01-01'])->assertStatus(422)->assertJsonValidationErrors('birthday');
+        $this->patchJson('/v1/me', ['birthday' => '14/03/1994'])->assertStatus(422)->assertJsonValidationErrors('birthday');
+
+        $this->patchJson('/v1/me', ['birthday' => '1994-03-14'])
+            ->assertOk()->assertJson(['birthday' => '1994-03-14', 'needs_birthday' => false]);
+
+        // Private: never on the public profile.
+        $this->getJson('/v1/users/'.$user->handle)->assertOk()->assertJsonMissingPath('birthday');
+    }
+
     public function test_suspended_users_are_locked_out(): void
     {
         $user = $this->signIn();

@@ -4,6 +4,7 @@ namespace App\Modules\Identity\Models;
 
 use App\Modules\Identity\Enums\VendorRole;
 use App\Modules\Media\Models\Media;
+use Carbon\CarbonInterface;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Models\Contracts\HasAvatar;
@@ -30,10 +31,10 @@ class User extends Authenticatable implements FilamentUser, HasAvatar, HasName, 
 
     protected $fillable = [
         'handle', 'display_name', 'phone', 'email', 'password', 'avatar_media_id',
-        'bio', 'city', 'lat', 'lng', 'is_private', 'settings',
+        'bio', 'city', 'birthday', 'lat', 'lng', 'is_private', 'settings',
     ];
 
-    protected $hidden = ['password', 'remember_token', 'phone', 'email', 'settings'];
+    protected $hidden = ['password', 'remember_token', 'phone', 'email', 'settings', 'birthday'];
 
     /** Database defaults, mirrored so new models have them before a refresh. */
     protected $attributes = [
@@ -50,6 +51,7 @@ class User extends Authenticatable implements FilamentUser, HasAvatar, HasName, 
         return [
             'phone_verified_at' => 'datetime',
             'last_active_at' => 'datetime',
+            'birthday' => 'date',
             'password' => 'hashed',
             'is_admin' => 'boolean',
             'is_private' => 'boolean',
@@ -103,6 +105,18 @@ class User extends Authenticatable implements FilamentUser, HasAvatar, HasName, 
             is_string($role) => VendorRole::from($role),
             default => null,
         };
+    }
+
+    /**
+     * The next date this user's birthday falls on, today included; null without a birthday.
+     * Birthday event suggestions are timed from this.
+     */
+    public function nextBirthday(?CarbonInterface $from = null): ?CarbonInterface
+    {
+        // TODO: return the next occurrence of $this->birthday on or after $from (default today,
+        // in config('eventapp.business_timezone')). Decide what a 29 February birthday does in
+        // non-leap years.
+        return null;
     }
 
     public function isActive(): bool

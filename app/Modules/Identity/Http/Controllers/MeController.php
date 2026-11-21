@@ -57,6 +57,11 @@ class MeController extends Controller
             'avatar_media_id' => ['sometimes', 'nullable', 'ulid'], // a ready image from POST /v1/uploads
             'bio' => ['sometimes', 'nullable', 'string', 'max:300'],
             'city' => ['sometimes', 'nullable', 'string', 'max:80'],
+            'birthday' => [
+                'sometimes', 'nullable', 'date_format:Y-m-d',
+                'before_or_equal:'.now()->subYears(config('eventapp.profile.min_age_years'))->toDateString(),
+                'after:'.now()->subYears(config('eventapp.profile.max_age_years'))->toDateString(),
+            ],
             'lat' => ['sometimes', 'nullable', 'numeric', 'between:-90,90'],
             'lng' => ['sometimes', 'nullable', 'numeric', 'between:-180,180'],
             'is_private' => ['sometimes', 'boolean'],

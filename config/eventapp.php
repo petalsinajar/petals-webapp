@@ -25,6 +25,12 @@ return [
         'refresh_token_days' => (int) env('REFRESH_TOKEN_DAYS', 60),
     ],
 
+    'profile' => [
+        // Youngest age a birthday may give; younger dates are refused.
+        'min_age_years' => 13,
+        'max_age_years' => 120,
+    ],
+
     'bookings' => [
         // How long a customer's cart hold lasts for instant-book items.
         'hold_minutes' => 15,

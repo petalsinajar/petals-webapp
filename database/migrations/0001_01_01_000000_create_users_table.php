@@ -20,6 +20,7 @@ return new class extends Migration
             $table->ulid('avatar_media_id')->nullable(); // foreign key added with the media table
             $table->string('bio', 300)->nullable();
             $table->string('city', 80)->nullable();
+            $table->date('birthday')->nullable(); // private: only the user sees it; drives birthday event suggestions
             $table->decimal('lat', 10, 7)->nullable();
             $table->decimal('lng', 10, 7)->nullable();
             $table->boolean('is_admin')->default(false);
